@@ -70,7 +70,7 @@ function render(){
  state.cases.forEach(c=>{const b=document.createElement("button");b.className="tab"+(c.id===state.activeId?" active":"");b.textContent=c.title;b.onclick=()=>{state.activeId=c.id;save();render()};tabs.appendChild(b)});
  const plus=document.createElement("button");plus.className="tab plus";plus.textContent="+";plus.onclick=addCase;tabs.appendChild(plus);
  const c=active(),sheet=document.getElementById("sheet");
- if(!c){sheet.innerHTML='<div class="empty"><h2>Aucun dossier</h2><p>Importez votre JSON privé ou créez un nouveau dossier.</p><button class="btn dark" onclick="document.getElementById(\\'fileInput\\').click()">Importer mes données</button></div>';return}
+ if(!c){sheet.innerHTML=`<div class="empty"><h2>Aucun dossier</h2><p>Importez votre JSON privé ou créez un nouveau dossier.</p><button class="btn dark" id="emptyImportBtn">Importer mes données</button></div>`;document.getElementById("emptyImportBtn").onclick=()=>document.getElementById("fileInput").click();return}
  sheet.innerHTML=`
  <div class="case-head">
   <div><h2>${esc(c.title)}</h2><div class="meta">${esc(c.place||"Lieu non renseigné")} · ${esc(c.type||"Type non renseigné")}</div></div>
@@ -117,10 +117,22 @@ function renderItems(c){
  });
 }
 function addCase(){const c={id:uid(),title:"Nouveau dossier",place:"",type:"",status:"À enquêter",goal:"",date:"",notes:"",items:[]};state.cases.push(c);state.activeId=c.id;save();render()}
-function download(name,obj){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function download(name,obj){
+ const blob=new Blob([JSON.stringify(obj,null,2)],{type:"application/json;charset=utf-8"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+ a.href=url;a.download=name;a.style.display="none";document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
 document.getElementById("importBtn").onclick=()=>document.getElementById("fileInput").click();
-document.getElementById("fileInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=clean(JSON.parse(await f.text()));state=data;save();render();alert(`${state.cases.length} dossier(s) importé(s).`)}catch(err){alert("Import impossible : "+err.message)}e.target.value=""};
-document.getElementById("exportBtn").onclick=()=>download("ariane-donnees-"+new Date().toISOString().slice(0,10)+".json",{...state,exportedAt:new Date().toISOString()});
+document.getElementById("fileInput").onchange=e=>{
+ const f=e.target.files&&e.target.files[0];if(!f)return;
+ const reader=new FileReader();
+ reader.onload=()=>{try{const data=clean(JSON.parse(String(reader.result||"")));state=data;save();render();alert(`${state.cases.length} dossier(s) importé(s).`)}catch(err){alert("Import impossible : "+err.message)}e.target.value=""};
+ reader.onerror=()=>{alert("Import impossible : lecture du fichier échouée.");e.target.value=""};
+ reader.readAsText(f,"utf-8");
+};
+document.getElementById("exportBtn").onclick=()=>{try{download("ariane-donnees-"+new Date().toISOString().slice(0,10)+".json",{...state,exportedAt:new Date().toISOString()})}catch(err){alert("Export impossible : "+err.message)}};
 document.getElementById("newCaseBtn").onclick=addCase;
 render();
 </script>
