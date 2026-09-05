@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ariane — Enquêtes aux archives</title>
+<meta name="description" content="Gestionnaire local d'enquêtes aux archives. Aucune donnée personnelle n'est intégrée au fichier HTML.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%236b5032%22/><path d=%22M12 45c14-2 14-24 29-24 8 0 12 8 8 15-5 9-20 4-16-6%22 fill=%22none%22 stroke=%22%23f4df9b%22 stroke-width=%225%22 stroke-linecap=%22round%22/><circle cx=%2212%22 cy=%2245%22 r=%225%22 fill=%22%23b23d30%22/></svg>">
+<style>
+:root{--bg:#d8c18e;--paper:#fff5cf;--paper2:#f7e9b7;--ink:#2c261c;--muted:#6b604e;--line:#9d8459;--tab:#aa6f3b;--red:#9c342b;--green:#455c42;--shadow:0 14px 34px #3b2c1830}
+*{box-sizing:border-box}body{margin:0;color:var(--ink);background:linear-gradient(#cbb27d,#e7d6aa);font-family:"Courier New",ui-monospace,monospace;min-height:100vh}
+button,input,select,textarea{font:inherit}button{cursor:pointer}.app{max-width:1180px;margin:auto;padding:22px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px}.brand{display:flex;gap:13px;align-items:center}.logo{width:48px;height:48px;border-radius:50%;background:#6b5032;color:#f8e5a8;display:grid;place-items:center;font:700 24px Georgia}.brand h1{margin:0;font:700 32px Georgia,serif}.brand p{margin:3px 0 0;color:#625845;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid #806a47;background:#fff6d3;color:#2c261c;padding:9px 12px;border-radius:4px;font-weight:700}.btn.dark{background:#3d493c;color:white;border-color:#3d493c}.btn.red{background:#8e382f;color:white;border-color:#8e382f}
+.privacy{background:#f7edc9;border:1px dashed #8d754e;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.45}
+.folder{background:var(--paper);border:1px solid #8d754e;box-shadow:var(--shadow);min-height:620px;position:relative}
+.tabs{display:flex;gap:4px;align-items:end;padding:10px 12px 0;background:#ad9362;overflow-x:auto}.tab{border:0;background:#d0aa69;padding:9px 13px;border-radius:7px 7px 0 0;white-space:nowrap;font-weight:700;color:#3b2d1e}.tab.active{background:var(--paper);padding-top:12px}.tab.plus{background:#805e37;color:white}
+.sheet{padding:24px}.empty{padding:70px 20px;text-align:center;color:var(--muted)}.empty h2{font:700 28px Georgia,serif;color:var(--ink);margin:0 0 10px}
+.case-head{display:grid;grid-template-columns:1fr auto;gap:15px;align-items:start;border-bottom:2px solid #7b6647;padding-bottom:16px;margin-bottom:18px}.case-head h2{margin:0;font:700 29px Georgia,serif}.meta{color:var(--muted);font-size:12px;margin-top:5px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:5px}.full{grid-column:1/-1}label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+input,select,textarea{border:1px solid #a28b61;background:#fffdf1;padding:9px;border-radius:2px;color:var(--ink);width:100%}textarea{min-height:95px;resize:vertical;line-height:1.45}
+.section{margin-top:22px}.section h3{font:700 19px Georgia,serif;margin:0 0 10px}.items{display:grid;gap:8px}
+.item{display:grid;grid-template-columns:32px minmax(0,1.5fr) minmax(120px,.65fr) minmax(0,1fr) auto;gap:7px;align-items:center;background:#fffaf0;border:1px solid #b49b6e;padding:8px}.item.done{opacity:.65}.item input[type=checkbox]{width:18px;height:18px}
+.item input{min-width:0}.photo{font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap}.photo input{width:55px}
+.case-actions{display:flex;gap:7px;flex-wrap:wrap}.footnote{font-size:11px;color:var(--muted);margin-top:20px;border-top:1px dashed #9e875e;padding-top:10px}
+dialog{border:1px solid #7e6744;background:#fff5cf;box-shadow:0 20px 60px #0005;width:min(520px,92vw)}dialog::backdrop{background:#2a211888}
+@media(max-width:760px){.app{padding:10px}header{align-items:flex-start}.brand p{display:none}.actions{justify-content:flex-end}.sheet{padding:15px}.grid{grid-template-columns:1fr}.full{grid-column:auto}.item{grid-template-columns:30px 1fr}.item .cote,.item .dossier,.item .photo,.item .del{grid-column:2}.folder{min-height:520px}}
+@media print{body{background:white}.actions,.privacy,.tabs,.case-actions,.del{display:none!important}.app{max-width:none;padding:0}.folder{border:0;box-shadow:none}.sheet{padding:0}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+ <div class="brand"><div class="logo">A</div><div><h1>Ariane</h1><p>Dossiers d’enquêtes aux archives</p></div></div>
+ <div class="actions">
+  <button class="btn dark" id="importBtn">Importer JSON</button>
+  <button class="btn" id="exportBtn">Exporter JSON</button>
+  <button class="btn" id="newCaseBtn">+ Dossier</button>
+ </div>
+</header>
+<div class="privacy">🔒 <strong>HTML sans données privées.</strong> Ce fichier ne contient aucun dossier préchargé. Les JSON choisis sont lus localement par votre navigateur puis enregistrés uniquement dans son stockage local.</div>
+<input id="fileInput" type="file" accept=".json,application/json" hidden>
+<div class="folder">
+ <nav class="tabs" id="tabs"></nav>
+ <main class="sheet" id="sheet"></main>
+</div>
+</div>
+<script>
+const KEY="ariane-local-v2";
+const STATUSES=["À enquêter","Préparée","En cours","Terminée","Archivée"];
+const uid=()=>crypto?.randomUUID?.()||("id-"+Date.now()+"-"+Math.random().toString(16).slice(2));
+let state=load();
+function clean(data){
+ if(!data||!Array.isArray(data.cases)) throw new Error("Le JSON ne contient pas de liste « cases ».");
+ const seen=new Set();
+ data.cases=data.cases.map(c=>{
+  c={...c}; if(!c.id||seen.has(c.id))c.id=uid();seen.add(c.id);
+  c.title=String(c.title||"Dossier sans titre");c.place=String(c.place||"");c.type=String(c.type||"");c.status=STATUSES.includes(c.status)?c.status:"À enquêter";c.goal=String(c.goal||"");c.date=String(c.date||"");c.notes=String(c.notes||"");
+  c.items=(Array.isArray(c.items)?c.items:[]).map(i=>({id:i.id||uid(),label:String(i.label||""),cote:String(i.cote||""),dossier:String(i.dossier||""),done:!!i.done,photographed:!!i.photographed,photoCount:Math.max(0,Number(i.photoCount)||0)}));
+  return c;
+ });
+ data.activeId=data.cases.some(c=>c.id===data.activeId)?data.activeId:(data.cases[0]?.id||null);
+ return {app:"Ariane",version:2,cases:data.cases,activeId:data.activeId};
+}
+function load(){try{const x=localStorage.getItem(KEY);return x?clean(JSON.parse(x)):{app:"Ariane",version:2,cases:[],activeId:null}}catch(e){return{app:"Ariane",version:2,cases:[],activeId:null}}}
+function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+function active(){return state.cases.find(c=>c.id===state.activeId)||null}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function render(){
+ const tabs=document.getElementById("tabs");tabs.innerHTML="";
+ state.cases.forEach(c=>{const b=document.createElement("button");b.className="tab"+(c.id===state.activeId?" active":"");b.textContent=c.title;b.onclick=()=>{state.activeId=c.id;save();render()};tabs.appendChild(b)});
+ const plus=document.createElement("button");plus.className="tab plus";plus.textContent="+";plus.onclick=addCase;tabs.appendChild(plus);
+ const c=active(),sheet=document.getElementById("sheet");
+ if(!c){sheet.innerHTML='<div class="empty"><h2>Aucun dossier</h2><p>Importez votre JSON privé ou créez un nouveau dossier.</p><button class="btn dark" onclick="document.getElementById(\\'fileInput\\').click()">Importer mes données</button></div>';return}
+ sheet.innerHTML=`
+ <div class="case-head">
+  <div><h2>${esc(c.title)}</h2><div class="meta">${esc(c.place||"Lieu non renseigné")} · ${esc(c.type||"Type non renseigné")}</div></div>
+  <div class="case-actions"><button class="btn" id="addItem">+ Pièce</button><button class="btn red" id="deleteCase">Supprimer</button></div>
+ </div>
+ <div class="grid">
+  ${field("title","Intitulé",c.title)}${field("status","Statut",c.status,"select")}${field("place","Lieu",c.place)}${field("type","Type / fonds",c.type)}
+  ${field("date","Date / période",c.date)}<div class="field"></div>
+  ${field("goal","Objectif",c.goal,"textarea","full")}${field("notes","Notes / méthode",c.notes,"textarea","full")}
+ </div>
+ <section class="section"><h3>Pièces et cotes</h3><div class="items" id="items"></div></section>
+ <div class="footnote">Les modifications sont sauvegardées dans le stockage local du navigateur. Pensez à exporter régulièrement un JSON de sauvegarde.</div>`;
+ document.querySelectorAll("[data-case-field]").forEach(el=>el.oninput=()=>{c[el.dataset.caseField]=el.value;save();if(el.dataset.caseField==="title")renderTabsOnly()});
+ document.getElementById("addItem").onclick=()=>{c.items.push({id:uid(),label:"",cote:"",dossier:"",done:false,photographed:false,photoCount:0});save();renderItems(c)};
+ document.getElementById("deleteCase").onclick=()=>{if(confirm("Supprimer ce dossier ?")){state.cases=state.cases.filter(x=>x.id!==c.id);state.activeId=state.cases[0]?.id||null;save();render()}};
+ renderItems(c);
+}
+function field(key,label,value,type="input",cls=""){
+ if(type==="select")return `<div class="field ${cls}"><label>${label}</label><select data-case-field="${key}">${STATUSES.map(s=>`<option ${s===value?"selected":""}>${esc(s)}</option>`).join("")}</select></div>`;
+ if(type==="textarea")return `<div class="field ${cls}"><label>${label}</label><textarea data-case-field="${key}">${esc(value)}</textarea></div>`;
+ return `<div class="field ${cls}"><label>${label}</label><input data-case-field="${key}" value="${esc(value)}"></div>`;
+}
+function renderTabsOnly(){const current=state.activeId;document.querySelectorAll(".tab").forEach(()=>{});render()}
+function renderItems(c){
+ const box=document.getElementById("items");if(!box)return;box.innerHTML="";
+ if(!c.items.length){box.innerHTML='<div class="meta">Aucune pièce pour ce dossier.</div>';return}
+ c.items.forEach(i=>{
+  const row=document.createElement("div");row.className="item"+(i.done?" done":"");row.innerHTML=`
+   <input type="checkbox" class="doneChk" ${i.done?"checked":""} title="Consulté / terminé">
+   <input class="lab" value="${esc(i.label)}" placeholder="Intitulé">
+   <input class="cote" value="${esc(i.cote)}" placeholder="Cote">
+   <input class="dossier" value="${esc(i.dossier)}" placeholder="N° dossier / indication">
+   <span class="photo"><input type="checkbox" class="photoChk" ${i.photographed?"checked":""}> photo <input type="number" min="0" class="photoCount" value="${i.photoCount}"></span>
+   <button class="btn del" title="Supprimer">×</button>`;
+  const inputs=row.querySelectorAll("input");
+  row.querySelector(".doneChk").onchange=e=>{i.done=e.target.checked;save();row.classList.toggle("done",i.done)};
+  row.querySelector(".photoChk").onchange=e=>{i.photographed=e.target.checked;save()};
+  row.querySelector(".photoCount").oninput=e=>{i.photoCount=Math.max(0,Number(e.target.value)||0);save()};
+  row.querySelector(".lab").oninput=e=>{i.label=e.target.value;save()};
+  row.querySelector(".cote").oninput=e=>{i.cote=e.target.value;save()};
+  row.querySelector(".dossier").oninput=e=>{i.dossier=e.target.value;save()};
+  row.querySelector(".del").onclick=()=>{c.items=c.items.filter(x=>x.id!==i.id);save();renderItems(c)};
+  box.appendChild(row);
+ });
+}
+function addCase(){const c={id:uid(),title:"Nouveau dossier",place:"",type:"",status:"À enquêter",goal:"",date:"",notes:"",items:[]};state.cases.push(c);state.activeId=c.id;save();render()}
+function download(name,obj){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+document.getElementById("importBtn").onclick=()=>document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=clean(JSON.parse(await f.text()));state=data;save();render();alert(`${state.cases.length} dossier(s) importé(s).`)}catch(err){alert("Import impossible : "+err.message)}e.target.value=""};
+document.getElementById("exportBtn").onclick=()=>download("ariane-donnees-"+new Date().toISOString().slice(0,10)+".json",{...state,exportedAt:new Date().toISOString()});
+document.getElementById("newCaseBtn").onclick=addCase;
+render();
+</script>
+</body></html>

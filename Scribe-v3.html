@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scribe — Assistant de correspondance archivistique</title>
+<meta name="description" content="Assistant local pour orienter une recherche d'archives et rédiger des courriels administratifs. Aucune donnée personnelle n'est intégrée au HTML.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%2323221f%22/><path d=%22M18 44c11-1 20-7 28-26 1-2 4-1 3 2-5 15-13 25-28 29-4 1-6-4-3-5Z%22 fill=%22%23f4eddd%22/><path d=%22M22 42c9-5 16-12 22-23%22 stroke=%22%23b44835%22 stroke-width=%223%22 stroke-linecap=%22round%22/></svg>">
+<style>
+:root{
+ --bg:#f3efe6;--paper:#fffdf8;--ink:#24221e;--muted:#716b61;--line:#ddd5c8;
+ --accent:#a74635;--dark:#283d3b;--soft:#eee7d9;--green:#496551;--amber:#8b6227;--red:#98453b;
+ --shadow:0 18px 52px rgba(48,39,28,.09)
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:linear-gradient(180deg,#e8e0d2,#f7f4ed 30rem,#f2eee6);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
+.shell{max-width:1240px;margin:auto;padding:22px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+.brand{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:13px;background:var(--ink);color:#fff;display:grid;place-items:center;font:29px Georgia,serif}
+.brand h1{font:700 31px Georgia,serif;margin:0}.brand p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.actions,.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:9px 12px;border-radius:9px;font-weight:700}
+.btn:hover{border-color:#b9ad9a}.btn.primary{background:var(--accent);border-color:var(--accent);color:white}.btn.dark{background:var(--ink);border-color:var(--ink);color:white}.btn.danger{color:var(--red)}
+.privacy{background:#edf3ef;border-left:3px solid var(--dark);padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.5}
+.nav{display:flex;gap:5px;margin-bottom:16px;overflow:auto}.nav button{border:0;background:transparent;padding:9px 12px;border-radius:9px;font-weight:800;color:var(--muted);white-space:nowrap}.nav button.active{background:var(--ink);color:#fff}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:17px;box-shadow:var(--shadow)}
+.head{padding:17px 19px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:center}.head h2,.head h3{font:700 21px Georgia,serif;margin:0}
+.body{padding:19px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 410px;gap:18px;align-items:start}.preview{position:sticky;top:15px}
+.kicker{text-transform:uppercase;letter-spacing:.12em;color:var(--accent);font-weight:850;font-size:10px}
+.welcome{padding:20px;margin-bottom:16px}.welcome h2{font:700 27px Georgia,serif;margin:5px 0 8px}.welcome p{margin:0;color:var(--muted);line-height:1.5;max-width:820px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:11px}.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field.three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+label{font-size:10px;font-weight:850;letter-spacing:.055em;text-transform:uppercase}
+input,select,textarea{border:1px solid var(--line);background:white;padding:10px 11px;border-radius:8px;width:100%;outline:none;color:var(--ink)}
+textarea{min-height:82px;resize:vertical;line-height:1.45}input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(167,70,53,.1)}
+.route-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px}.route{border:1px solid var(--line);background:#fff;padding:13px;border-radius:11px;text-align:left;min-height:84px}.route:hover{transform:translateY(-1px);border-color:#b9aa94}.route.active{border:2px solid var(--accent);padding:12px;background:#fff9f6}.route strong{display:block;margin-bottom:4px}.route small{color:var(--muted);line-height:1.3}
+.method{background:#f4efe5;border:1px solid #ded3c1;border-radius:12px;padding:14px;margin:14px 0}.method h3{font:700 18px Georgia,serif;margin:0 0 8px}.method-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.method-block{background:rgba(255,255,255,.6);padding:10px;border-radius:8px;font-size:12px;line-height:1.45}.method-block b{display:block;margin-bottom:3px}.path{margin:8px 0 0;padding-left:18px}.path li{margin:3px 0}
+.compose-title{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:4px 0 12px}.compose-title h3{font:700 19px Georgia,serif;margin:0}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:var(--soft);font-size:10px;font-weight:850}.badge.good{background:#e6efe8;color:var(--green)}.badge.warn{background:#f3ead6;color:var(--amber)}
+.readiness{border:1px solid var(--line);border-radius:10px;padding:11px;margin:11px 0;background:#fff}.bar{height:6px;background:#eee9df;border-radius:99px;overflow:hidden;margin:7px 0}.bar>i{display:block;height:100%;background:var(--green);width:0}.missing{font-size:11px;color:var(--muted);line-height:1.45}
+.contact-card{background:var(--soft);padding:11px;border-radius:9px;font-size:12px;line-height:1.5;margin-bottom:10px}.subject{font-weight:750}.letter{min-height:370px;font-family:Georgia,serif;font-size:15px;line-height:1.52}
+.preview-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.hint{color:var(--muted);font-size:11px;line-height:1.4}
+.list{display:grid;gap:8px}.card{border:1px solid var(--line);border-radius:11px;padding:12px;background:#fff}.card-top{display:flex;justify-content:space-between;gap:12px;align-items:start}.card h3{font-size:14px;margin:0 0 4px}.card p{font-size:11px;color:var(--muted);margin:0;line-height:1.4}.status{font-size:10px;padding:4px 7px;background:var(--soft);border-radius:999px;font-weight:850;white-space:nowrap}.status.sent{background:#e8eee9;color:var(--green)}.status.waiting{background:#f3ead6;color:var(--amber)}.status.closed{background:#e9e9e9;color:#666}
+.card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.mini{border:1px solid var(--line);background:#fff;padding:6px 8px;border-radius:7px;font-size:11px;font-weight:750}
+.empty{text-align:center;padding:42px 18px;color:var(--muted)}.empty h3{font:700 21px Georgia,serif;color:var(--ink);margin:0 0 6px}
+.contact-edit{display:grid;grid-template-columns:1.2fr 1fr 1.2fr auto;gap:8px;align-items:end}.separator{height:1px;background:var(--line);margin:16px 0}
+.notice{padding:10px 11px;border-radius:8px;background:#f6f0df;font-size:11px;line-height:1.45;color:#5f5545}
+dialog{border:1px solid var(--line);background:var(--paper);border-radius:14px;box-shadow:0 20px 70px #0005;width:min(540px,92vw)}dialog::backdrop{background:#211a1480}
+@media(max-width:970px){.layout{grid-template-columns:1fr}.preview{position:static}.route-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.shell{padding:11px}.brand p{display:none}.actions .btn{padding:8px 9px}.route-grid,.field-row,.method-grid,.field.three{grid-template-columns:1fr}.preview-actions{grid-template-columns:1fr}.contact-edit{grid-template-columns:1fr}.head,.body{padding:14px}.welcome{padding:16px}}
+@media print{header,.privacy,.nav,.assistant-col,.preview-actions{display:none!important}.layout{display:block}.panel{border:0;box-shadow:none}.preview{position:static}.letter{min-height:0}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header>
+ <div class="brand"><div class="logo">S</div><div><h1>Scribe</h1><p>Comprendre la demande, trouver les mots.</p></div></div>
+ <div class="actions">
+   <button class="btn primary" id="importBtn">Importer Scribe</button>
+   <button class="btn" id="arianeBtn">Depuis Ariane</button>
+   <button class="btn" id="exportBtn">Exporter JSON</button>
+ </div>
+</header>
+<div class="privacy">🔒 <strong>Aucune donnée personnelle n’est intégrée au HTML.</strong> Les fichiers Scribe et Ariane sont lus localement. Scribe n’effectue aucune requête réseau tant que vous n’utilisez pas volontairement Gmail ou votre application de messagerie.</div>
+<input id="fileInput" type="file" accept=".json,application/json" hidden>
+<input id="arianeInput" type="file" accept=".json,application/json" hidden>
+
+<nav class="nav">
+ <button data-tab="assistant" class="active">Assistant</button>
+ <button data-tab="drafts">Brouillons</button>
+ <button data-tab="contacts">Contacts</button>
+ <button data-tab="history">Historique</button>
+</nav>
+
+<div id="view"></div>
+</div>
+
+<dialog id="arianeDialog">
+ <form method="dialog">
+  <h3 style="font:700 21px Georgia;margin-top:0">Importer un dossier Ariane</h3>
+  <p class="hint">Sélectionnez le dossier à transformer en nouvelle demande. Les données restent dans ce navigateur.</p>
+  <div class="field"><label>Dossier</label><select id="arianeCase"></select></div>
+  <div class="toolbar"><button value="cancel" class="btn">Annuler</button><button value="default" class="btn primary" id="confirmAriane">Préparer la demande</button></div>
+ </form>
+</dialog>
+
+<script>
+const KEY="scribe-local-v3";
+const OLD_KEY="scribe-local-v2";
+const uid=()=>crypto?.randomUUID?.()||("id-"+Date.now()+"-"+Math.random().toString(16).slice(2));
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const fmtDate=s=>{try{return new Date(s).toLocaleDateString("fr-FR")}catch{return s||""}};
+const normalize=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+
+const routes={
+ civil:{icon:"📜",label:"État civil",desc:"Naissance, mariage, décès.",keepers:"Mairie, archives municipales ou départementales selon la période.",docs:"Registres d’état civil, tables, mentions marginales.",path:["Identifier la commune et la date","Vérifier si l’acte est déjà accessible","Sinon demander copie, cote ou modalités"],need:["names","date","place"],template:"civil"},
+ justice:{icon:"⚖️",label:"Justice",desc:"Jugement, divorce, dossier.",keepers:"Service d’archives compétent ou juridiction productrice selon la période.",docs:"Répertoires, rôles, minutes de jugement, dossiers de procédure.",path:["Identifier juridiction + date + parties","Retrouver minute / numéro de rôle","Remonter au dossier de procédure s’il existe"],need:["person1","court","judgment"],template:"justice"},
+ notarial:{icon:"✒️",label:"Notariat",desc:"Contrat, testament, inventaire.",keepers:"Archives départementales ou étude notariale selon le dépôt et la période.",docs:"Répertoires, minutes notariales, expéditions.",path:["Identifier lieu, date et parties","Chercher le notaire ou son étude","Consulter répertoire puis minutes"],need:["names","date","place"],template:"notarial"},
+ cadastre:{icon:"🏠",label:"Cadastre",desc:"Parcelle, propriétaire, matrice.",keepers:"Archives départementales ou communales.",docs:"Plans, états de section, matrices cadastrales.",path:["Repérer la parcelle sur le plan","État de section : propriétaire + renvoi","Matrice : suivre mutations et propriétaires"],need:["commune"],template:"cadastre"},
+ population:{icon:"👥",label:"Population",desc:"Recensement, liste nominative.",keepers:"Archives départementales ou municipales.",docs:"Recensements, listes nominatives, dénombrements.",path:["Fixer commune + année","Vérifier l’existence de la campagne","Demander cote ou consultation si non accessible"],need:["commune","period"],template:"population"},
+ military:{icon:"🎖️",label:"Militaire",desc:"Matricule, combattant, dossier.",keepers:"Archives départementales, services militaires ou organismes spécialisés selon le document.",docs:"Registres matricules, dossiers individuels, cartes et fichiers.",path:["Réunir identité + naissance","Ajouter classe, matricule, unité ou n° de carte","Demander la cote précise si la référence est partielle"],need:["people"],template:"military"},
+ succession:{icon:"🧾",label:"Successions",desc:"Succession, TSA, déclaration.",keepers:"Archives départementales, principalement fonds fiscaux et notariaux.",docs:"Tables de successions et absences, déclarations, actes notariés.",path:["Partir du décès et du domicile","Chercher table / bureau compétent","Relever renvoi vers déclaration ou acte"],need:["names","date","place"],template:"succession"},
+ identity:{icon:"🪪",label:"Identité",desc:"Carte, dossier, photographie.",keepers:"Fonds préfectoraux ou administratifs ; conservation très variable.",docs:"Registres de délivrance, fichiers, dossiers de demande lorsqu’ils ont été conservés.",path:["Préciser période + domicile","Distinguer spécimens et fonds nominatifs","Demander existence, instrument et conditions"],need:["names","period","place"],template:"identity"},
+ municipal:{icon:"🏛️",label:"Administration",desc:"Maires, élections, délibérations.",keepers:"Archives municipales, dépôts communaux ou archives départementales.",docs:"Délibérations, élections, correspondance, dossiers administratifs.",path:["Fixer commune + période + sujet","Identifier producteur administratif","Demander série, fonds ou dépôt correspondant"],need:["commune","period","subjectMatter"],template:"municipal"},
+ work:{icon:"🏭",label:"Travail",desc:"Entreprise, salarié, carrière.",keepers:"Archives du travail, fonds d’entreprise, archives publiques ou privées.",docs:"Dossiers de personnel, registres, fonds d’entreprise, dossiers professionnels.",path:["Identifier employeur + établissement","Délimiter période et fonction","Chercher fonds producteur avant la personne"],need:["people","company","period"],template:"work"},
+ religious:{icon:"⛪",label:"Religion",desc:"Paroisse, diocèse, sacrement.",keepers:"Archives diocésaines, paroissiales, départementales ou municipales selon le fonds.",docs:"Registres paroissiaux, dossiers de paroisse, actes religieux.",path:["Identifier paroisse + date","Distinguer registre paroissial et dossier administratif","Demander copie ou orientation"],need:["place","period"],template:"religious"},
+ school:{icon:"🎓",label:"École",desc:"Scolarité, établissement.",keepers:"Archives départementales, municipales, établissement ou rectorat selon les documents.",docs:"Registres matricules, dossiers scolaires, listes d’élèves, archives d’établissement.",path:["Identifier établissement + période","Préciser personne et classe si connue","Demander existence et communicabilité"],need:["people","place","period"],template:"school"},
+ other:{icon:"🔎",label:"Autre",desc:"Recherche non classée.",keepers:"À déterminer selon le producteur du document.",docs:"Commencer par identifier qui a créé le document recherché.",path:["Décrire précisément le document","Identifier lieu et période","Demander orientation vers le fonds compétent"],need:["subjectMatter"],template:"locate"}
+};
+
+const fieldSchema={
+ subjectMatter:["Objet de la recherche","Ex. archives d’une municipalité, dossier administratif…","text"],
+ knownFacts:["Éléments déjà connus","Dates, lieux, cotes, références déjà vérifiées…","textarea"],
+ request:["Résultat attendu","Ex. identifier la cote exacte et les modalités de consultation","textarea"],
+ references:["Références connues","Cote partielle, n° dossier, matricule, folio…","textarea"],
+ names:["Personne(s) concernée(s)","Prénom NOM ; Prénom NOM","text"],
+ people:["Personne(s) recherchée(s)","Prénom NOM ; Prénom NOM","text"],
+ person1:["Première partie / personne","Prénom NOM","text"],person2:["Seconde partie / personne","Prénom NOM","text"],
+ date:["Date","JJ/MM/AAAA ou année","text"],period:["Période","Ex. 1836, 1790–1793","text"],place:["Lieu","Commune / juridiction / établissement","text"],commune:["Commune","Nom de la commune","text"],
+ court:["Juridiction","Tribunal / cour","text"],judgment:["Date du jugement","JJ/MM/AAAA","text"],caseType:["Nature de l’affaire","Divorce, succession, tutelle…","text"],marriage:["Repère d’état civil","Ex. mariage du … à …","text"],mention:["Mention / date complémentaire","Ex. mention marginale datée du …","text"],
+ actType:["Type d’acte","Naissance, mariage, décès…","text"],copyType:["Type de copie souhaité","Copie intégrale, reproduction simple…","text"],relation:["Lien / motif utile","Lien de parenté ou objet de la recherche","text"],filiation:["Filiation connue","Parents si nécessaire","text"],
+ notary:["Notaire / étude","Nom si connu","text"],cote:["Cote exacte ou partielle","Ex. 5 E …","text"],
+ locality:["Lieu-dit / secteur","Lieu-dit ou quartier","text"],parcels:["Parcelles / folios","Numéros ou références","text"],
+ company:["Entreprise / employeur","Nom de l’entreprise","text"],role:["Fonction / métier","Si connu","text"],
+ unit:["Unité / régiment","Si connu","text"],matricule:["Matricule / classe","Si connu","text"],
+ school:["Établissement","Nom de l’établissement","text"]
+};
+
+const templates={
+ locate:{label:"Orientation / cote",fields:["subjectMatter","period","place","knownFacts","references","request"]},
+ civil:{label:"État civil",fields:["actType","names","date","place","filiation","relation","knownFacts","request"]},
+ justice:{label:"Justice",fields:["person1","person2","caseType","court","judgment","marriage","mention","references","knownFacts","request"]},
+ notarial:{label:"Notariat",fields:["actType","names","date","place","notary","cote","references","knownFacts","request"]},
+ cadastre:{label:"Cadastre",fields:["commune","locality","period","parcels","references","knownFacts","request"]},
+ population:{label:"Recensement / population",fields:["commune","period","people","locality","references","knownFacts","request"]},
+ military:{label:"Militaire / combattant",fields:["people","date","place","matricule","unit","references","knownFacts","request"]},
+ succession:{label:"Succession",fields:["names","date","place","references","knownFacts","request"]},
+ identity:{label:"Pièce d’identité",fields:["names","period","place","references","knownFacts","request"]},
+ municipal:{label:"Administration / élections",fields:["commune","period","subjectMatter","people","references","knownFacts","request"]},
+ work:{label:"Travail / entreprise",fields:["people","company","role","period","place","references","knownFacts","request"]},
+ religious:{label:"Archives religieuses",fields:["names","period","place","actType","references","knownFacts","request"]},
+ school:{label:"École / scolarité",fields:["people","school","period","place","references","knownFacts","request"]}
+};
+
+const objectives={
+ locate:{label:"Trouver une cote / un fonds",ask:"m’indiquer la cote précise, le fonds ou l’instrument de recherche à consulter"},
+ copy:{label:"Obtenir une reproduction",ask:"m’indiquer s’il est possible d’obtenir une reproduction du document et selon quelles modalités"},
+ consult:{label:"Préparer une consultation",ask:"me confirmer les références à commander et les modalités de consultation en salle de lecture"},
+ communicate:{label:"Vérifier la communicabilité",ask:"m’indiquer les conditions de communicabilité et, le cas échéant, les justificatifs ou démarches nécessaires"},
+ orient:{label:"Être orienté",ask:"m’orienter vers le service, le fonds ou la démarche la plus adaptée à cette recherche"}
+};
+
+function emptyData(){return{app:"Scribe",version:3,profile:{senderName:""},contacts:[],drafts:[],history:[],settings:{defaultObjective:"locate"}}}
+function cleanV3(d){
+ d=d&&typeof d==="object"?d:{};
+ const out=emptyData();
+ out.profile.senderName=String(d.profile?.senderName||"");
+ out.contacts=(Array.isArray(d.contacts)?d.contacts:[]).map(c=>({id:c.id||uid(),name:String(c.name||""),email:String(c.email||""),address:String(c.address||""),kind:String(c.kind||""),website:String(c.website||""),notes:String(c.notes||"")}));
+ out.drafts=(Array.isArray(d.drafts)?d.drafts:[]).map(x=>({
+   id:x.id||uid(),title:String(x.title||"Brouillon"),routeId:routes[x.routeId]?x.routeId:routeFromTemplate(x.templateId),
+   templateId:templates[x.templateId]?x.templateId:"locate",objectiveId:objectives[x.objectiveId]?x.objectiveId:"locate",
+   contactId:String(x.contactId||""),status:["draft","sent","waiting","closed"].includes(x.status)?x.status:"draft",
+   createdAt:x.createdAt||new Date().toISOString(),updatedAt:x.updatedAt||new Date().toISOString(),sentAt:x.sentAt||null,
+   fields:{...(x.fields||{})},extra:String(x.extra||""),customSubject:String(x.customSubject||""),customBody:String(x.customBody||"")
+ }));
+ out.history=(Array.isArray(d.history)?d.history:[]).map(h=>({...h,id:h.id||uid()}));
+ out.settings={defaultObjective:objectives[d.settings?.defaultObjective]?d.settings.defaultObjective:"locate"};
+ return out;
+}
+function routeFromTemplate(t){return Object.entries(routes).find(([id,r])=>r.template===t)?.[0] || (routes[t]?t:"other")}
+function load(){
+ try{
+  const raw=localStorage.getItem(KEY);
+  if(raw)return cleanV3(JSON.parse(raw));
+  const old=localStorage.getItem(OLD_KEY);
+  if(old){const migrated=cleanV3(JSON.parse(old));localStorage.setItem(KEY,JSON.stringify(migrated));return migrated}
+ }catch(e){}
+ return emptyData()
+}
+function save(){localStorage.setItem(KEY,JSON.stringify(data))}
+function download(name,obj){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},600)}
+
+let data=load(),activeTab="assistant",routeId="justice",templateId="justice",objectiveId=data.settings.defaultObjective||"locate",currentDraftId=null,values={},extra="",customSubject="",customBody="",arianeCache=null;
+
+function currentContact(){return data.contacts.find(c=>c.id===document.querySelector("#contactSelect")?.value)||null}
+function routeForTemplate(t){return Object.entries(routes).find(([id,r])=>r.template===t)?.[0]||"other"}
+
+function subjectFor(v){
+ const core={
+  civil:`Demande d’acte${v.actType?" de "+v.actType:""}${v.names?" — "+v.names:""}`,
+  justice:`Recherche d’un dossier judiciaire${v.person1?" — "+v.person1:""}`,
+  notarial:`Recherche d’un acte notarié${v.names?" — "+v.names:""}`,
+  cadastre:`Recherche cadastrale${v.commune?" — "+v.commune:""}`,
+  population:`Recensement / population${v.commune?" — "+v.commune:""}`,
+  military:`Recherche militaire${v.people?" — "+v.people:""}`,
+  succession:`Recherche successorale${v.names?" — "+v.names:""}`,
+  identity:`Recherche de dossier d’identité${v.names?" — "+v.names:""}`,
+  municipal:`Archives administratives${v.commune?" — "+v.commune:""}`,
+  work:`Archives du travail${v.people?" — "+v.people:""}`,
+  religious:`Archives religieuses${v.names?" — "+v.names:""}`,
+  school:`Archives scolaires${v.people?" — "+v.people:""}`,
+  locate:`Demande d’orientation${v.subjectMatter?" — "+v.subjectMatter:""}`
+ };
+ return (core[templateId]||core.locate).replace(/\s+/g," ").trim()
+}
+function detailLines(v){
+ const lines=[];
+ const add=(label,val)=>{if(String(val||"").trim())lines.push(`– ${label} : ${String(val).trim()}`)};
+ if(templateId==="justice"){add("personne / partie",v.person1);add("autre partie",v.person2);add("nature de l’affaire",v.caseType);add("juridiction",v.court);add("date du jugement",v.judgment);add("repère d’état civil",v.marriage);add("mention complémentaire",v.mention)}
+ else if(templateId==="civil"){add("personne(s)",v.names);add("acte",v.actType);add("date",v.date);add("lieu",v.place);add("filiation",v.filiation);add("lien / motif",v.relation)}
+ else if(templateId==="cadastre"){add("commune",v.commune);add("secteur",v.locality);add("période",v.period);add("parcelles / folios",v.parcels)}
+ else if(templateId==="population"){add("commune",v.commune);add("année / période",v.period);add("personne(s)",v.people);add("secteur",v.locality)}
+ else if(templateId==="military"){add("personne(s)",v.people);add("date",v.date);add("lieu",v.place);add("matricule / classe",v.matricule);add("unité",v.unit)}
+ else if(templateId==="notarial"){add("type d’acte",v.actType);add("personne(s)",v.names);add("date",v.date);add("lieu",v.place);add("notaire / étude",v.notary);add("cote",v.cote)}
+ else if(templateId==="succession"){add("personne",v.names);add("date / décès",v.date);add("domicile / lieu",v.place)}
+ else if(templateId==="identity"){add("personne",v.names);add("période",v.period);add("domicile / lieu",v.place)}
+ else if(templateId==="municipal"){add("commune",v.commune);add("période",v.period);add("objet",v.subjectMatter);add("personne(s)",v.people)}
+ else if(templateId==="work"){add("personne(s)",v.people);add("entreprise",v.company);add("fonction",v.role);add("période",v.period);add("lieu",v.place)}
+ else if(templateId==="religious"){add("personne(s)",v.names);add("type d’acte / dossier",v.actType);add("période",v.period);add("paroisse / lieu",v.place)}
+ else if(templateId==="school"){add("personne(s)",v.people);add("établissement",v.school);add("période",v.period);add("lieu",v.place)}
+ else {add("objet",v.subjectMatter);add("période",v.period);add("lieu",v.place)}
+ if(v.references)lines.push(`– références déjà connues : ${v.references.trim()}`);
+ return lines.join("\n")
+}
+function introFor(v){
+ const intros={
+  civil:"Je me permets de vous contacter dans le cadre d’une recherche généalogique afin de retrouver un acte d’état civil.",
+  justice:"Je me permets de vous contacter dans le cadre d’une recherche familiale afin de retrouver des archives judiciaires.",
+  notarial:"Je me permets de vous contacter afin de retrouver un acte ou un dossier notarié.",
+  cadastre:"Je mène une recherche foncière et généalogique portant sur un bien ou un secteur cadastral.",
+  population:"Je mène une recherche généalogique dans les recensements ou listes nominatives de population.",
+  military:"Je mène une recherche familiale sur un parcours militaire ou un dossier d’ancien combattant.",
+  succession:"Je mène une recherche familiale concernant une succession et les documents susceptibles de l’éclairer.",
+  identity:"Je cherche à savoir si des archives nominatives relatives à une pièce d’identité ont été conservées.",
+  municipal:"Je mène une recherche historique portant sur l’administration d’une commune et ses acteurs.",
+  work:"Je mène une recherche historique et familiale portant sur une personne, une entreprise ou une activité professionnelle.",
+  religious:"Je mène une recherche généalogique dans des archives paroissiales ou diocésaines.",
+  school:"Je mène une recherche familiale concernant la scolarité d’une personne ou les archives d’un établissement.",
+  locate:"Je me permets de vous contacter afin d’être orienté dans une recherche documentaire."
+ };
+ return intros[templateId]||intros.locate
+}
+function buildMail(){
+ const sender=document.querySelector("#sender")?.value.trim()||data.profile.senderName||"[Prénom NOM]";
+ const v={...values,sender};
+ const obj=objectives[objectiveId]||objectives.locate;
+ const lines=detailLines(v);
+ let body=`Madame, Monsieur,\n\n${introFor(v)}`;
+ if(lines)body+=`\n\nLes éléments dont je dispose sont les suivants :\n${lines}`;
+ if(v.knownFacts)body+=`\n\nÉléments déjà vérifiés ou contexte utile : ${v.knownFacts.trim()}`;
+ const req=(v.request||"").trim();
+ body+=`\n\n${req ? req : `Pourriez-vous, si possible, ${obj.ask} ?`}`;
+ if(extra.trim())body+=`\n\n${extra.trim()}`;
+ body+=`\n\nJe reste à votre disposition pour fournir toute précision complémentaire utile à l’identification du document.\n\nJe vous remercie par avance pour votre aide.\n\nCordialement,\n\n${sender}`;
+ if(document.querySelector("#tone")?.value==="short"){
+   body=body.replace("Je reste à votre disposition pour fournir toute précision complémentaire utile à l’identification du document.\n\n","")
+            .replace("Je vous remercie par avance pour votre aide.","Merci par avance pour votre aide.");
+ }
+ if(document.querySelector("#tone")?.value==="detailed" && routeId!=="other"){
+   body=body.replace("\n\nJe reste à votre disposition",`\n\nMon objectif est de disposer d’une référence suffisamment précise pour préparer efficacement la suite de la recherche.\n\nJe reste à votre disposition`);
+ }
+ return {subject:customSubject||subjectFor(v),body:customBody||body}
+}
+function requiredKeys(){
+ const r=routes[routeId]||routes.other;
+ const base=[...(r.need||[])];
+ if(objectiveId==="copy" && !base.includes("references"))base.push("references");
+ return [...new Set(base)]
+}
+function readiness(){
+ const req=requiredKeys();const missing=req.filter(k=>!String(values[k]||"").trim());
+ const score=req.length?Math.round(((req.length-missing.length)/req.length)*100):100;
+ return {score,missing}
+}
+
+function renderNav(){document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===activeTab))}
+function render(){renderNav();const view=document.querySelector("#view");if(activeTab==="assistant")renderAssistant(view);else if(activeTab==="drafts")renderDrafts(view);else if(activeTab==="contacts")renderContacts(view);else renderHistory(view)}
+
+function renderAssistant(view){
+ const r=routes[routeId]||routes.other;
+ view.innerHTML=`
+ <section class="panel welcome">
+  <div class="kicker">Orientation</div>
+  <h2>Que cherchez-vous ?</h2>
+  <p>Choisissez le type de document ou de recherche. Scribe vous indique le chemin documentaire habituel, les informations utiles, puis prépare la demande adaptée.</p>
+  <div class="route-grid">${Object.entries(routes).map(([id,x])=>`<button class="route ${id===routeId?"active":""}" data-route="${id}"><strong>${x.icon} ${esc(x.label)}</strong><small>${esc(x.desc)}</small></button>`).join("")}</div>
+ </section>
+ <div class="layout">
+  <section class="panel assistant-col">
+   <div class="head"><h2>${r.icon} ${esc(r.label)}</h2><span class="badge">méthode</span></div>
+   <div class="body">
+    <div class="method">
+     <h3>Avant d’écrire</h3>
+     <div class="method-grid">
+      <div class="method-block"><b>Où chercher en priorité</b>${esc(r.keepers)}</div>
+      <div class="method-block"><b>Documents typiques</b>${esc(r.docs)}</div>
+     </div>
+     <ol class="path">${r.path.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
+    </div>
+    <div class="compose-title"><h3>Préparer la demande</h3><span class="badge ${readiness().score===100?"good":"warn"}" id="readyBadge">${readiness().score}% prêt</span></div>
+    <div class="field-row">
+      <div class="field"><label>Contact</label><select id="contactSelect"><option value="">— Contact libre —</option>${data.contacts.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select></div>
+      <div class="field"><label>Objectif</label><select id="objective">${Object.entries(objectives).map(([id,o])=>`<option value="${id}" ${id===objectiveId?"selected":""}>${esc(o.label)}</option>`).join("")}</select></div>
+    </div>
+    <div id="freeContact"></div>
+    <div class="field"><label>Modèle</label><select id="templateSelect">${Object.entries(templates).map(([id,t])=>`<option value="${id}" ${id===templateId?"selected":""}>${esc(t.label)}</option>`).join("")}</select></div>
+    <div id="dynamicFields"></div>
+    <div class="field-row">
+      <div class="field"><label>Votre nom</label><input id="sender" placeholder="Prénom NOM" value="${esc(data.profile.senderName)}"></div>
+      <div class="field"><label>Style</label><select id="tone"><option value="normal">Normal</option><option value="short">Court</option><option value="detailed">Détaillé</option></select></div>
+    </div>
+    <div class="field"><label>Précision libre</label><textarea id="extra" placeholder="Information complémentaire à intégrer au mail">${esc(extra)}</textarea></div>
+    <div class="readiness" id="readiness"></div>
+    <div class="toolbar"><button class="btn primary" id="saveDraftBtn">${currentDraftId?"Mettre à jour le brouillon":"Enregistrer le brouillon"}</button><button class="btn" id="resetBtn">Nouvelle demande</button></div>
+   </div>
+  </section>
+  <aside class="panel preview">
+   <div class="head"><h2>Courriel</h2><span class="badge good">modifiable</span></div>
+   <div class="body">
+    <div class="contact-card" id="contactCard"></div>
+    <div class="field"><label>Objet</label><input class="subject" id="subject"></div>
+    <div class="field"><label>Corps</label><textarea class="letter" id="mailBody"></textarea></div>
+    <div class="preview-actions">
+      <button class="btn dark" id="copyBtn">Copier le mail</button>
+      <button class="btn" id="gmailBtn">Ouvrir Gmail</button>
+      <button class="btn" id="mailBtn">Application mail</button>
+      <button class="btn" id="markSentBtn">Marquer envoyé</button>
+    </div>
+   </div>
+  </aside>
+ </div>`;
+ bindAssistant();
+ renderDynamicFields();
+ updateAssistant();
+}
+function bindAssistant(){
+ document.querySelectorAll("[data-route]").forEach(b=>b.onclick=()=>{routeId=b.dataset.route;templateId=routes[routeId].template;values={};extra="";customSubject="";customBody="";currentDraftId=null;render()});
+ document.querySelector("#contactSelect").onchange=()=>{renderFreeContact();updateAssistant()};
+ document.querySelector("#objective").onchange=e=>{objectiveId=e.target.value;data.settings.defaultObjective=objectiveId;save();updateAssistant()};
+ document.querySelector("#templateSelect").onchange=e=>{templateId=e.target.value;routeId=routeForTemplate(templateId);values={};customSubject="";customBody="";renderDynamicFields();updateAssistant()};
+ document.querySelector("#sender").oninput=e=>{data.profile.senderName=e.target.value;save();updateAssistant()};
+ document.querySelector("#tone").onchange=()=>{customBody="";updateAssistant()};
+ document.querySelector("#extra").oninput=e=>{extra=e.target.value;customBody="";updateAssistant()};
+ document.querySelector("#saveDraftBtn").onclick=saveDraft;
+ document.querySelector("#resetBtn").onclick=resetCompose;
+ document.querySelector("#copyBtn").onclick=async()=>{const m=mailFromUI();await navigator.clipboard.writeText(`Objet : ${m.subject}\n\n${m.body}`);flash("#copyBtn","Copié ✓")};
+ document.querySelector("#gmailBtn").onclick=()=>openGmail();
+ document.querySelector("#mailBtn").onclick=()=>openMail();
+ document.querySelector("#markSentBtn").onclick=markSent;
+ renderFreeContact()
+}
+function renderFreeContact(){
+ const box=document.querySelector("#freeContact");if(!box)return;
+ if(document.querySelector("#contactSelect").value){box.innerHTML="";return}
+ box.innerHTML=`<div class="field-row"><div class="field"><label>Nom du service</label><input id="freeName" placeholder="Ex. Mairie de…"></div><div class="field"><label>Courriel</label><input id="freeEmail" type="email" placeholder="service@exemple.fr"></div></div>`;
+ box.querySelectorAll("input").forEach(i=>i.oninput=updateAssistant)
+}
+function renderDynamicFields(){
+ const box=document.querySelector("#dynamicFields");if(!box)return;box.innerHTML="";
+ (templates[templateId]?.fields||templates.locate.fields).forEach(k=>{
+  const [lab,ph,type]=fieldSchema[k]||[k,"","text"];
+  const wrap=document.createElement("div");wrap.className="field";
+  wrap.innerHTML=`<label>${esc(lab)}</label>${type==="textarea"?`<textarea data-key="${k}" placeholder="${esc(ph)}">${esc(values[k]||"")}</textarea>`:`<input data-key="${k}" value="${esc(values[k]||"")}" placeholder="${esc(ph)}">`}`;
+  wrap.querySelector("[data-key]").oninput=e=>{values[k]=e.target.value;customSubject="";customBody="";updateAssistant()};
+  box.appendChild(wrap)
+ })
+}
+function updateAssistant(){
+ if(!document.querySelector("#subject"))return;
+ const c=currentContact(),freeName=document.querySelector("#freeName")?.value||"",freeEmail=document.querySelector("#freeEmail")?.value||"";
+ const card=document.querySelector("#contactCard");
+ card.innerHTML=c?`<strong>${esc(c.name)}</strong><br>${esc(c.email||"Courriel non renseigné")}${c.address?`<br>${esc(c.address)}`:""}`:`<strong>${esc(freeName||"Contact libre")}</strong><br>${esc(freeEmail||"Courriel à renseigner")}`;
+ const m=buildMail();
+ const subj=document.querySelector("#subject"),body=document.querySelector("#mailBody");
+ if(document.activeElement!==subj)subj.value=m.subject;if(document.activeElement!==body)body.value=m.body;
+ subj.oninput=e=>customSubject=e.target.value;body.oninput=e=>customBody=e.target.value;
+ const rd=readiness(),labels=rd.missing.map(k=>fieldSchema[k]?.[0]||k);
+ document.querySelector("#readiness").innerHTML=`<strong>Préparation : ${rd.score}%</strong><div class="bar"><i style="width:${rd.score}%"></i></div><div class="missing">${labels.length?`Informations utiles encore manquantes : ${labels.map(esc).join(", ")}.`:"Les informations essentielles pour ce type de demande sont renseignées."}</div>`;
+ document.querySelector("#readyBadge").textContent=`${rd.score}% prêt`;document.querySelector("#readyBadge").className=`badge ${rd.score===100?"good":"warn"}`;
+}
+function mailFromUI(){return{subject:document.querySelector("#subject")?.value||buildMail().subject,body:document.querySelector("#mailBody")?.value||buildMail().body}}
+function addressForMail(){const c=currentContact();return c?.email||document.querySelector("#freeEmail")?.value||""}
+function openGmail(){const m=mailFromUI();window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(addressForMail())}&su=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`,"_blank","noopener")}
+function openMail(){const m=mailFromUI();location.href=`mailto:${encodeURIComponent(addressForMail())}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`}
+function flash(sel,text){const b=document.querySelector(sel);if(!b)return;const old=b.textContent;b.textContent=text;setTimeout(()=>b.textContent=old,1200)}
+function saveDraft(){
+ const old=currentDraftId?data.drafts.find(d=>d.id===currentDraftId):null;
+ const title=prompt("Nom du brouillon :",old?.title||subjectFor(values));if(!title)return;
+ const m=mailFromUI(),id=currentDraftId||uid();
+ const d={id,title,routeId,templateId,objectiveId,contactId:document.querySelector("#contactSelect").value,status:old?.status||"draft",createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),sentAt:old?.sentAt||null,fields:{...values},extra,customSubject:m.subject,customBody:m.body};
+ const ix=data.drafts.findIndex(x=>x.id===id);if(ix>=0)data.drafts[ix]=d;else data.drafts.unshift(d);currentDraftId=id;save();flash("#saveDraftBtn","Enregistré ✓")
+}
+function markSent(){
+ if(!currentDraftId)saveDraft();
+ const d=data.drafts.find(x=>x.id===currentDraftId);if(!d)return;
+ const m=mailFromUI();d.status="sent";d.sentAt=new Date().toISOString();d.updatedAt=d.sentAt;d.customSubject=m.subject;d.customBody=m.body;
+ data.history.unshift({id:uid(),draftId:d.id,at:d.sentAt,kind:"sent",to:addressForMail(),subject:m.subject,body:m.body,title:d.title});
+ save();flash("#markSentBtn","Envoyé ✓")
+}
+function resetCompose(){routeId="justice";templateId="justice";objectiveId=data.settings.defaultObjective||"locate";currentDraftId=null;values={};extra="";customSubject="";customBody="";render()}
+
+function renderDrafts(view){
+ const ds=[...data.drafts].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+ view.innerHTML=`<section class="panel"><div class="head"><h2>Brouillons et suivis</h2><button class="btn primary" id="newFromDrafts">+ Nouvelle demande</button></div><div class="body"><div class="list">${ds.length?ds.map(d=>draftCard(d)).join(""):`<div class="empty"><h3>Aucun brouillon</h3><p>Préparez une demande depuis l’assistant ou importez votre JSON privé.</p></div>`}</div></div></section>`;
+ document.querySelector("#newFromDrafts").onclick=()=>{activeTab="assistant";resetCompose()};
+ document.querySelectorAll("[data-open-draft]").forEach(b=>b.onclick=()=>openDraft(b.dataset.openDraft));
+ document.querySelectorAll("[data-relance]").forEach(b=>b.onclick=()=>makeFollowup(b.dataset.relance));
+ document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{const d=data.drafts.find(x=>x.id===b.dataset.close);if(d){d.status="closed";save();render()}});
+ document.querySelectorAll("[data-delete-draft]").forEach(b=>b.onclick=()=>{if(confirm("Supprimer ce brouillon ?")){data.drafts=data.drafts.filter(x=>x.id!==b.dataset.deleteDraft);save();render()}});
+}
+function draftCard(d){
+ const status={draft:["Brouillon",""],sent:["Envoyé","sent"],waiting:["Relancé","waiting"],closed:["Clos","closed"]}[d.status]||["Brouillon",""];
+ const when=d.sentAt?` · envoyé le ${fmtDate(d.sentAt)}`:"";
+ return `<article class="card"><div class="card-top"><div><h3>${esc(d.title)}</h3><p>${esc(templates[d.templateId]?.label||"Demande")} · ${esc(objectives[d.objectiveId]?.label||"")} ${when}</p></div><span class="status ${status[1]}">${status[0]}</span></div><div class="card-actions"><button class="mini" data-open-draft="${esc(d.id)}">Ouvrir</button>${d.status==="sent"||d.status==="waiting"?`<button class="mini" data-relance="${esc(d.id)}">Générer une relance</button>`:""}<button class="mini" data-close="${esc(d.id)}">Clore</button><button class="mini" data-delete-draft="${esc(d.id)}">Supprimer</button></div></article>`
+}
+function openDraft(id){
+ const d=data.drafts.find(x=>x.id===id);if(!d)return;currentDraftId=d.id;routeId=d.routeId||routeForTemplate(d.templateId);templateId=d.templateId||"locate";objectiveId=d.objectiveId||"locate";values={...d.fields};extra=d.extra||"";customSubject=d.customSubject||"";customBody=d.customBody||"";activeTab="assistant";render();
+ setTimeout(()=>{if(document.querySelector("#contactSelect")){document.querySelector("#contactSelect").value=d.contactId||"";renderFreeContact();updateAssistant()}},0)
+}
+function makeFollowup(id){
+ const d=data.drafts.find(x=>x.id===id);if(!d)return;openDraft(id);
+ setTimeout(()=>{
+  const original=d.sentAt?` envoyée le ${fmtDate(d.sentAt)}`:"";
+  customSubject=`Relance — ${d.customSubject||subjectFor(d.fields)}`;
+  customBody=`Madame, Monsieur,\n\nJe me permets de revenir vers vous au sujet de ma demande${original} concernant ${d.title}.\n\nN’ayant pas encore reçu de réponse, je souhaiterais savoir si vous avez pu en prendre connaissance et, le cas échéant, si des précisions complémentaires seraient nécessaires pour traiter ma demande.\n\nJe vous remercie par avance pour votre retour.\n\nCordialement,\n\n${data.profile.senderName||"[Prénom NOM]"}`;
+  d.status="waiting";d.updatedAt=new Date().toISOString();save();updateAssistant()
+ },0)
+}
+
+function renderContacts(view){
+ view.innerHTML=`<section class="panel"><div class="head"><h2>Contacts privés</h2><button class="btn primary" id="addContact">+ Contact</button></div><div class="body"><div class="notice">Les contacts appartiennent au JSON privé, pas au fichier HTML public.</div><div class="separator"></div><div class="list">${data.contacts.length?data.contacts.map(c=>`<article class="card"><div class="card-top"><div><h3>${esc(c.name||"Contact sans nom")}</h3><p>${esc(c.email||"Courriel absent")}${c.address?" · "+esc(c.address):""}</p></div></div><div class="card-actions"><button class="mini" data-edit-contact="${esc(c.id)}">Modifier</button><button class="mini" data-delete-contact="${esc(c.id)}">Supprimer</button></div></article>`).join(""):`<div class="empty"><h3>Aucun contact</h3><p>Ajoutez un service ou importez votre JSON.</p></div>`}</div></div></section>`;
+ document.querySelector("#addContact").onclick=()=>editContact();
+ document.querySelectorAll("[data-edit-contact]").forEach(b=>b.onclick=()=>editContact(b.dataset.editContact));
+ document.querySelectorAll("[data-delete-contact]").forEach(b=>b.onclick=()=>{if(confirm("Supprimer ce contact ?")){data.contacts=data.contacts.filter(c=>c.id!==b.dataset.deleteContact);save();render()}});
+}
+function editContact(id=null){
+ const old=id?data.contacts.find(c=>c.id===id):null;
+ const name=prompt("Nom du service :",old?.name||"");if(name===null)return;
+ const email=prompt("Courriel :",old?.email||"");if(email===null)return;
+ const address=prompt("Adresse / précision :",old?.address||"")??"";
+ const website=prompt("Site ou formulaire de contact (facultatif) :",old?.website||"")??"";
+ const obj={id:old?.id||uid(),name,email,address,website,kind:old?.kind||"",notes:old?.notes||""};
+ const ix=data.contacts.findIndex(c=>c.id===obj.id);if(ix>=0)data.contacts[ix]=obj;else data.contacts.push(obj);save();render()
+}
+
+function renderHistory(view){
+ const hs=[...data.history].sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+ view.innerHTML=`<section class="panel"><div class="head"><h2>Historique local</h2><button class="btn danger" id="clearHistory">Vider</button></div><div class="body"><div class="list">${hs.length?hs.map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.title||h.subject||"Courriel")}</h3><p>${fmtDate(h.at)} · ${esc(h.to||"destinataire non enregistré")}</p></div><span class="status sent">${h.kind==="followup"?"Relance":"Envoi"}</span></div><div class="card-actions">${h.draftId?`<button class="mini" data-hist-open="${esc(h.draftId)}">Ouvrir le dossier</button>`:""}</div></article>`).join(""):`<div class="empty"><h3>Aucun envoi archivé</h3><p>Les messages marqués « envoyé » apparaîtront ici.</p></div>`}</div></div></section>`;
+ document.querySelector("#clearHistory").onclick=()=>{if(confirm("Vider l’historique ?")){data.history=[];save();render()}};
+ document.querySelectorAll("[data-hist-open]").forEach(b=>b.onclick=()=>openDraft(b.dataset.histOpen))
+}
+
+document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;render()});
+document.querySelector("#importBtn").onclick=()=>document.querySelector("#fileInput").click();
+document.querySelector("#fileInput").onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ try{const parsed=JSON.parse(await f.text());data=cleanV3(parsed);save();alert(`Scribe v${parsed.version||"?"} importé et converti au format v3.`);activeTab="assistant";resetCompose()}
+ catch(err){alert("Import impossible : "+err.message)}
+ e.target.value=""
+};
+document.querySelector("#exportBtn").onclick=()=>download("scribe-donnees-v3-"+new Date().toISOString().slice(0,10)+".json",{...data,exportedAt:new Date().toISOString()});
+
+document.querySelector("#arianeBtn").onclick=()=>document.querySelector("#arianeInput").click();
+document.querySelector("#arianeInput").onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ try{
+  const a=JSON.parse(await f.text());if(!Array.isArray(a.cases))throw new Error("Ce fichier ne contient pas de dossiers Ariane.");
+  arianeCache=a.cases;const sel=document.querySelector("#arianeCase");
+  sel.innerHTML=arianeCache.map((c,i)=>`<option value="${i}">${esc(c.title||"Dossier sans titre")}</option>`).join("");
+  document.querySelector("#arianeDialog").showModal()
+ }catch(err){alert("Import Ariane impossible : "+err.message)}
+ e.target.value=""
+};
+document.querySelector("#confirmAriane").onclick=e=>{
+ if(!arianeCache?.length)return;
+ const c=arianeCache[Number(document.querySelector("#arianeCase").value)||0];
+ const text=[c.goal,c.notes].filter(Boolean).join(" ");
+ const combined=normalize(`${c.title} ${c.type} ${text}`);
+ routeId=combined.includes("divorce")||combined.includes("tribunal")||combined.includes("justice")?"justice":
+ combined.includes("cadastre")||combined.includes("matrice")||combined.includes("parcelle")?"cadastre":
+ combined.includes("combattant")||combined.includes("militaire")||combined.includes("matricule")?"military":
+ combined.includes("notair")||combined.includes("contrat de mariage")?"notarial":
+ combined.includes("recensement")||combined.includes("population")?"population":
+ combined.includes("maire")||combined.includes("municip")||combined.includes("election")?"municipal":
+ combined.includes("identit")?"identity":"other";
+ templateId=routes[routeId].template;objectiveId="locate";currentDraftId=null;extra="";customSubject="";customBody="";
+ const refs=(c.items||[]).filter(i=>i.cote||i.dossier).map(i=>[i.label,i.cote,i.dossier].filter(Boolean).join(" — ")).join("; ");
+ values={subjectMatter:c.title||"",place:c.place||"",knownFacts:[c.goal,c.notes].filter(Boolean).join(" "),references:refs,request:""};
+ if(templateId==="cadastre"){values.commune=c.place||""}
+ if(templateId==="population"){values.commune=c.place||"";values.period=c.date||""}
+ if(templateId==="municipal"){values.commune=c.place||"";values.period=c.date||""}
+ if(templateId==="justice"){values.knownFacts=[c.goal,c.notes,refs?`Références Ariane : ${refs}`:""].filter(Boolean).join(" ")}
+ if(templateId==="military"){values.references=refs;values.knownFacts=[c.goal,c.notes].filter(Boolean).join(" ")}
+ activeTab="assistant";render()
+};
+
+render();
+</script>
+</body>
+</html>
