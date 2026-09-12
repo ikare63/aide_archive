@@ -23,6 +23,7 @@ input,select,textarea{border:1px solid #a28b61;background:#fffdf1;padding:9px;bo
 .item input{min-width:0}.photo{font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap}.photo input{width:55px}
 .case-actions{display:flex;gap:7px;flex-wrap:wrap}.footnote{font-size:11px;color:var(--muted);margin-top:20px;border-top:1px dashed #9e875e;padding-top:10px}
 dialog{border:1px solid #7e6744;background:#fff5cf;box-shadow:0 20px 60px #0005;width:min(520px,92vw)}dialog::backdrop{background:#2a211888}
+.sync-notice{margin:0 0 14px;padding:10px 12px;border:1px solid #9a7a48;border-radius:8px;background:#fff3c7;color:#4a351e;font-size:12px;font-weight:700}.sync-notice[hidden]{display:none}
 @media(max-width:760px){.app{padding:10px}header{align-items:flex-start}.brand p{display:none}.actions{justify-content:flex-end}.sheet{padding:15px}.grid{grid-template-columns:1fr}.full{grid-column:auto}.item{grid-template-columns:30px 1fr}.item .cote,.item .dossier,.item .photo,.item .del{grid-column:2}.folder{min-height:520px}}
 @media print{body{background:white}.actions,.privacy,.tabs,.case-actions,.del{display:none!important}.app{max-width:none;padding:0}.folder{border:0;box-shadow:none}.sheet{padding:0}}
 </style>
@@ -38,12 +39,14 @@ dialog{border:1px solid #7e6744;background:#fff5cf;box-shadow:0 20px 60px #0005;
  </div>
 </header>
 <div class="privacy">🔒 <strong>HTML sans données privées.</strong> Ce fichier ne contient aucun dossier préchargé. Les JSON choisis sont lus localement par votre navigateur puis enregistrés uniquement dans son stockage local.</div>
+<div class="sync-notice" id="pistoriaSyncNotice" hidden></div>
 <input id="fileInput" type="file" accept=".json,application/json" hidden>
 <div class="folder">
  <nav class="tabs" id="tabs"></nav>
  <main class="sheet" id="sheet"></main>
 </div>
 </div>
+<script src="lenaic-bus.js?v=1"></script>
 <script>
 const KEY="ariane-local-v2";
 const STATUSES=["À enquêter","Préparée","En cours","Terminée","Archivée"];
@@ -64,6 +67,36 @@ function clean(data){
 function load(){try{const x=localStorage.getItem(KEY);return x?clean(JSON.parse(x)):{app:"Ariane",version:2,cases:[],activeId:null}}catch(e){return{app:"Ariane",version:2,cases:[],activeId:null}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(state));}
 function active(){return state.cases.find(c=>c.id===state.activeId)||null}
+
+
+/* ---------- Réception Pistoria → Ariane ---------- */
+function showPistoriaSyncNotice(text){
+ const box=document.getElementById('pistoriaSyncNotice');if(!box)return;
+ box.textContent=text;box.hidden=false;clearTimeout(box._t);box._t=setTimeout(()=>box.hidden=true,6500);
+}
+function arianeCaseFromPistoriaEvent(event){
+ const p=event?.payload||{};
+ return {
+  id:uid(), title:String(p.title||'Enquête Pistoria'), place:String(p.place||''), type:String(p.type||''),
+  status:STATUSES.includes(p.status)?p.status:'À enquêter', goal:String(p.goal||''), date:String(p.date||''), notes:String(p.notes||''),
+  items:p.item?[{id:uid(),label:String(p.item.label||''),cote:String(p.item.cote||''),dossier:String(p.item.dossier||''),done:false,photographed:false,photoCount:0}]:[],
+  sourceApp:'Pistoria', sourceKey:String(p.sourceKey||''), pistoriaInvestigationId:p.pistoriaInvestigationId||'', pistoriaStepId:p.pistoriaStepId||'', importedAt:new Date().toISOString()
+ };
+}
+function processPistoriaInbox(){
+ if(!window.LenaicBus)return 0;
+ const pending=LenaicBus.pending({type:'ariane.case.create',source:'pistoria',target:'ariane'});
+ let added=0,last=null;
+ pending.forEach(event=>{
+  const sourceKey=String(event.payload?.sourceKey||'');
+  const existing=sourceKey&&state.cases.find(c=>c.sourceApp==='Pistoria'&&c.sourceKey===sourceKey);
+  if(existing){LenaicBus.ack(event.id,{consumer:'ariane',caseId:existing.id,duplicate:true});return}
+  const c=arianeCaseFromPistoriaEvent(event); state.cases.push(c); state.activeId=c.id; last=c; added++;
+  LenaicBus.ack(event.id,{consumer:'ariane',caseId:c.id});
+ });
+ if(added){save();render();showPistoriaSyncNotice(`${added} enquête${added>1?'s':''} créée${added>1?'s':''} depuis Pistoria${last?` · ${last.title}`:''}.`)}
+ return added;
+}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function render(){
  const tabs=document.getElementById("tabs");tabs.innerHTML="";
@@ -135,5 +168,7 @@ document.getElementById("fileInput").onchange=e=>{
 document.getElementById("exportBtn").onclick=()=>{try{download("ariane-donnees-"+new Date().toISOString().slice(0,10)+".json",{...state,exportedAt:new Date().toISOString()})}catch(err){alert("Export impossible : "+err.message)}};
 document.getElementById("newCaseBtn").onclick=addCase;
 render();
+processPistoriaInbox();
+if(window.LenaicBus)LenaicBus.subscribe(()=>processPistoriaInbox());
 </script>
 </body></html>
