@@ -40,7 +40,7 @@ textarea{min-height:82px;resize:vertical;line-height:1.45}input:focus,select:foc
 .readiness{border:1px solid var(--line);border-radius:10px;padding:11px;margin:11px 0;background:#fff}.bar{height:6px;background:#eee9df;border-radius:99px;overflow:hidden;margin:7px 0}.bar>i{display:block;height:100%;background:var(--green);width:0}.missing{font-size:11px;color:var(--muted);line-height:1.45}
 .contact-card{background:var(--soft);padding:11px;border-radius:9px;font-size:12px;line-height:1.5;margin-bottom:10px}.subject{font-weight:750}.letter{min-height:370px;font-family:Georgia,serif;font-size:15px;line-height:1.52}
 .preview-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.hint{color:var(--muted);font-size:11px;line-height:1.4}
-.list{display:grid;gap:8px}.card{border:1px solid var(--line);border-radius:11px;padding:12px;background:#fff}.card-top{display:flex;justify-content:space-between;gap:12px;align-items:start}.card h3{font-size:14px;margin:0 0 4px}.card p{font-size:11px;color:var(--muted);margin:0;line-height:1.4}.status{font-size:10px;padding:4px 7px;background:var(--soft);border-radius:999px;font-weight:850;white-space:nowrap}.status.sent{background:#e8eee9;color:var(--green)}.status.waiting{background:#f3ead6;color:var(--amber)}.status.closed{background:#e9e9e9;color:#666}
+.list{display:grid;gap:8px}.card{border:1px solid var(--line);border-radius:11px;padding:12px;background:#fff}.card-top{display:flex;justify-content:space-between;gap:12px;align-items:start}.card h3{font-size:14px;margin:0 0 4px}.card p{font-size:11px;color:var(--muted);margin:0;line-height:1.4}.status{font-size:10px;padding:4px 7px;background:var(--soft);border-radius:999px;font-weight:850;white-space:nowrap}.status.sent{background:#e8eee9;color:var(--green)}.status.waiting{background:#f3ead6;color:var(--amber)}.status.received{background:#e4f2f7;color:#286678}.status.closed{background:#e9e9e9;color:#666}
 .card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.mini{border:1px solid var(--line);background:#fff;padding:6px 8px;border-radius:7px;font-size:11px;font-weight:750}
 .empty{text-align:center;padding:42px 18px;color:var(--muted)}.empty h3{font:700 21px Georgia,serif;color:var(--ink);margin:0 0 6px}
 .contact-edit{display:grid;grid-template-columns:1.2fr 1fr 1.2fr auto;gap:8px;align-items:end}.separator{height:1px;background:var(--line);margin:16px 0}
@@ -84,8 +84,10 @@ dialog{border:1px solid var(--line);background:var(--paper);border-radius:14px;b
  </form>
 </dialog>
 
+<script src="lenaic-bus.js"></script>
 <script>
 const KEY="scribe-local-v3";
+const SCRIBE_SNAPSHOT_KEY="lenaic-scribe-snapshot-v1";
 const OLD_KEY="scribe-local-v2";
 const uid=()=>crypto?.randomUUID?.()||("id-"+Date.now()+"-"+Math.random().toString(16).slice(2));
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
@@ -159,8 +161,8 @@ function cleanV3(d){
  out.drafts=(Array.isArray(d.drafts)?d.drafts:[]).map(x=>({
    id:x.id||uid(),title:String(x.title||"Brouillon"),routeId:routes[x.routeId]?x.routeId:routeFromTemplate(x.templateId),
    templateId:templates[x.templateId]?x.templateId:"locate",objectiveId:objectives[x.objectiveId]?x.objectiveId:"locate",
-   contactId:String(x.contactId||""),status:["draft","sent","waiting","closed"].includes(x.status)?x.status:"draft",
-   createdAt:x.createdAt||new Date().toISOString(),updatedAt:x.updatedAt||new Date().toISOString(),sentAt:x.sentAt||null,
+   contactId:String(x.contactId||""),status:["draft","sent","waiting","received","closed"].includes(x.status)?x.status:"draft",
+   createdAt:x.createdAt||new Date().toISOString(),updatedAt:x.updatedAt||new Date().toISOString(),sentAt:x.sentAt||null,receivedAt:x.receivedAt||null,
    fields:{...(x.fields||{})},extra:String(x.extra||""),customSubject:String(x.customSubject||""),customBody:String(x.customBody||"")
  }));
  out.history=(Array.isArray(d.history)?d.history:[]).map(h=>({...h,id:h.id||uid()}));
@@ -177,7 +179,29 @@ function load(){
  }catch(e){}
  return emptyData()
 }
-function save(){localStorage.setItem(KEY,JSON.stringify(data))}
+function scribeContactLabel(d){
+ const c=data.contacts.find(x=>x.id===d.contactId);if(c?.name)return c.name;
+ const hist=[...data.history].filter(h=>h.draftId===d.id).sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")))[0];
+ return hist?.to||"Service d’archives";
+}
+function scribeAgeDays(d){const base=d.sentAt||d.updatedAt||d.createdAt;if(!base)return 0;const t=new Date(base).getTime();return Number.isFinite(t)?Math.max(0,Math.floor((Date.now()-t)/86400000)):0}
+function scribeSnapshot(){
+ const drafts=Array.isArray(data.drafts)?data.drafts:[];
+ const counts={draft:0,sent:0,waiting:0,received:0,closed:0,awaiting:0};
+ drafts.forEach(d=>{if(counts[d.status]!==undefined)counts[d.status]++;if(d.status==="sent"||d.status==="waiting")counts.awaiting++});
+ const pending=drafts.filter(d=>d.status==="sent"||d.status==="waiting").sort((a,b)=>String(a.sentAt||a.updatedAt||"").localeCompare(String(b.sentAt||b.updatedAt||""))).map(d=>({id:d.id,title:d.title||"Demande aux archives",contact:scribeContactLabel(d),status:d.status,sentAt:d.sentAt||null,updatedAt:d.updatedAt||null,ageDays:scribeAgeDays(d)}));
+ const received=drafts.filter(d=>d.status==="received").sort((a,b)=>String(b.receivedAt||b.updatedAt||"").localeCompare(String(a.receivedAt||a.updatedAt||""))).map(d=>({id:d.id,title:d.title||"Réponse d’archives",contact:scribeContactLabel(d),receivedAt:d.receivedAt||d.updatedAt||null}));
+ return {version:1,source:"scribe",generatedAt:new Date().toISOString(),counts,pending,received:received.slice(0,8)};
+}
+function publishScribeSnapshot(reason="change"){
+ try{const snap=scribeSnapshot();localStorage.setItem(SCRIBE_SNAPSHOT_KEY,JSON.stringify(snap));return snap}catch(e){return null}
+}
+function publishScribeEvent(type,d,payload={}){
+ if(!window.LenaicBus||!d)return;
+ LenaicBus.publish(type,{draftId:d.id,title:d.title||"Demande aux archives",contact:scribeContactLabel(d),status:d.status,sentAt:d.sentAt||null,receivedAt:d.receivedAt||null,...payload},{source:"scribe",target:"3615"});
+}
+function save(){localStorage.setItem(KEY,JSON.stringify(data));publishScribeSnapshot("save")}
+
 function download(name,obj){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},600)}
 
 let data=load(),activeTab="assistant",routeId="justice",templateId="justice",objectiveId=data.settings.defaultObjective||"locate",currentDraftId=null,values={},extra="",customSubject="",customBody="",arianeCache=null;
@@ -387,15 +411,15 @@ function saveDraft(){
  const old=currentDraftId?data.drafts.find(d=>d.id===currentDraftId):null;
  const title=prompt("Nom du brouillon :",old?.title||subjectFor(values));if(!title)return;
  const m=mailFromUI(),id=currentDraftId||uid();
- const d={id,title,routeId,templateId,objectiveId,contactId:document.querySelector("#contactSelect").value,status:old?.status||"draft",createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),sentAt:old?.sentAt||null,fields:{...values},extra,customSubject:m.subject,customBody:m.body};
+ const d={id,title,routeId,templateId,objectiveId,contactId:document.querySelector("#contactSelect").value,status:old?.status||"draft",createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),sentAt:old?.sentAt||null,receivedAt:old?.receivedAt||null,fields:{...values},extra,customSubject:m.subject,customBody:m.body};
  const ix=data.drafts.findIndex(x=>x.id===id);if(ix>=0)data.drafts[ix]=d;else data.drafts.unshift(d);currentDraftId=id;save();flash("#saveDraftBtn","Enregistré ✓")
 }
 function markSent(){
  if(!currentDraftId)saveDraft();
  const d=data.drafts.find(x=>x.id===currentDraftId);if(!d)return;
- const m=mailFromUI();d.status="sent";d.sentAt=new Date().toISOString();d.updatedAt=d.sentAt;d.customSubject=m.subject;d.customBody=m.body;
+ const m=mailFromUI();d.status="sent";d.sentAt=new Date().toISOString();d.receivedAt=null;d.updatedAt=d.sentAt;d.customSubject=m.subject;d.customBody=m.body;
  data.history.unshift({id:uid(),draftId:d.id,at:d.sentAt,kind:"sent",to:addressForMail(),subject:m.subject,body:m.body,title:d.title});
- save();flash("#markSentBtn","Envoyé ✓")
+ save();publishScribeEvent("archive.request.sent",d);flash("#markSentBtn","Envoyé ✓")
 }
 function resetCompose(){routeId="justice";templateId="justice";objectiveId=data.settings.defaultObjective||"locate";currentDraftId=null;values={};extra="";customSubject="";customBody="";render()}
 
@@ -405,13 +429,22 @@ function renderDrafts(view){
  document.querySelector("#newFromDrafts").onclick=()=>{activeTab="assistant";resetCompose()};
  document.querySelectorAll("[data-open-draft]").forEach(b=>b.onclick=()=>openDraft(b.dataset.openDraft));
  document.querySelectorAll("[data-relance]").forEach(b=>b.onclick=()=>makeFollowup(b.dataset.relance));
- document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{const d=data.drafts.find(x=>x.id===b.dataset.close);if(d){d.status="closed";save();render()}});
+ document.querySelectorAll("[data-response]").forEach(b=>b.onclick=()=>markResponseReceived(b.dataset.response));
+ document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{const d=data.drafts.find(x=>x.id===b.dataset.close);if(d){d.status="closed";d.updatedAt=new Date().toISOString();save();publishScribeEvent("archive.request.closed",d);render()}});
  document.querySelectorAll("[data-delete-draft]").forEach(b=>b.onclick=()=>{if(confirm("Supprimer ce brouillon ?")){data.drafts=data.drafts.filter(x=>x.id!==b.dataset.deleteDraft);save();render()}});
 }
 function draftCard(d){
- const status={draft:["Brouillon",""],sent:["Envoyé","sent"],waiting:["Relancé","waiting"],closed:["Clos","closed"]}[d.status]||["Brouillon",""];
+ const status={draft:["Brouillon",""],sent:["Envoyé","sent"],waiting:["Relancé","waiting"],received:["Réponse reçue","received"],closed:["Clos","closed"]}[d.status]||["Brouillon",""];
  const when=d.sentAt?` · envoyé le ${fmtDate(d.sentAt)}`:"";
- return `<article class="card"><div class="card-top"><div><h3>${esc(d.title)}</h3><p>${esc(templates[d.templateId]?.label||"Demande")} · ${esc(objectives[d.objectiveId]?.label||"")} ${when}</p></div><span class="status ${status[1]}">${status[0]}</span></div><div class="card-actions"><button class="mini" data-open-draft="${esc(d.id)}">Ouvrir</button>${d.status==="sent"||d.status==="waiting"?`<button class="mini" data-relance="${esc(d.id)}">Générer une relance</button>`:""}<button class="mini" data-close="${esc(d.id)}">Clore</button><button class="mini" data-delete-draft="${esc(d.id)}">Supprimer</button></div></article>`
+ const received=d.receivedAt?` · réponse le ${fmtDate(d.receivedAt)}`:"";
+ const awaiting=d.status==="sent"||d.status==="waiting";
+ return `<article class="card"><div class="card-top"><div><h3>${esc(d.title)}</h3><p>${esc(templates[d.templateId]?.label||"Demande")} · ${esc(objectives[d.objectiveId]?.label||"")} ${when}${received}</p></div><span class="status ${status[1]}">${status[0]}</span></div><div class="card-actions"><button class="mini" data-open-draft="${esc(d.id)}">Ouvrir</button>${awaiting?`<button class="mini" data-response="${esc(d.id)}">Réponse reçue</button><button class="mini" data-relance="${esc(d.id)}">Générer une relance</button>`:""}<button class="mini" data-close="${esc(d.id)}">Clore</button><button class="mini" data-delete-draft="${esc(d.id)}">Supprimer</button></div></article>`
+}
+function markResponseReceived(id){
+ const d=data.drafts.find(x=>x.id===id);if(!d)return;
+ const now=new Date().toISOString();d.status="received";d.receivedAt=now;d.updatedAt=now;
+ data.history.unshift({id:uid(),draftId:d.id,at:now,kind:"response",to:scribeContactLabel(d),subject:d.customSubject||d.title,title:d.title});
+ save();publishScribeEvent("archive.response.received",d);render()
 }
 function openDraft(id){
  const d=data.drafts.find(x=>x.id===id);if(!d)return;currentDraftId=d.id;routeId=d.routeId||routeForTemplate(d.templateId);templateId=d.templateId||"locate";objectiveId=d.objectiveId||"locate";values={...d.fields};extra=d.extra||"";customSubject=d.customSubject||"";customBody=d.customBody||"";activeTab="assistant";render();
@@ -423,7 +456,7 @@ function makeFollowup(id){
   const original=d.sentAt?` envoyée le ${fmtDate(d.sentAt)}`:"";
   customSubject=`Relance — ${d.customSubject||subjectFor(d.fields)}`;
   customBody=`Madame, Monsieur,\n\nJe me permets de revenir vers vous au sujet de ma demande${original} concernant ${d.title}.\n\nN’ayant pas encore reçu de réponse, je souhaiterais savoir si vous avez pu en prendre connaissance et, le cas échéant, si des précisions complémentaires seraient nécessaires pour traiter ma demande.\n\nJe vous remercie par avance pour votre retour.\n\nCordialement,\n\n${data.profile.senderName||"[Prénom NOM]"}`;
-  d.status="waiting";d.updatedAt=new Date().toISOString();save();updateAssistant()
+  d.status="waiting";d.updatedAt=new Date().toISOString();save();publishScribeEvent("archive.request.followup",d);updateAssistant()
  },0)
 }
 
@@ -445,7 +478,7 @@ function editContact(id=null){
 
 function renderHistory(view){
  const hs=[...data.history].sort((a,b)=>String(b.at).localeCompare(String(a.at)));
- view.innerHTML=`<section class="panel"><div class="head"><h2>Historique local</h2><button class="btn danger" id="clearHistory">Vider</button></div><div class="body"><div class="list">${hs.length?hs.map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.title||h.subject||"Courriel")}</h3><p>${fmtDate(h.at)} · ${esc(h.to||"destinataire non enregistré")}</p></div><span class="status sent">${h.kind==="followup"?"Relance":"Envoi"}</span></div><div class="card-actions">${h.draftId?`<button class="mini" data-hist-open="${esc(h.draftId)}">Ouvrir le dossier</button>`:""}</div></article>`).join(""):`<div class="empty"><h3>Aucun envoi archivé</h3><p>Les messages marqués « envoyé » apparaîtront ici.</p></div>`}</div></div></section>`;
+ view.innerHTML=`<section class="panel"><div class="head"><h2>Historique local</h2><button class="btn danger" id="clearHistory">Vider</button></div><div class="body"><div class="list">${hs.length?hs.map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.title||h.subject||"Courriel")}</h3><p>${fmtDate(h.at)} · ${esc(h.to||"destinataire non enregistré")}</p></div><span class="status ${h.kind==="response"?"received":"sent"}">${h.kind==="response"?"Réponse":h.kind==="followup"?"Relance":"Envoi"}</span></div><div class="card-actions">${h.draftId?`<button class="mini" data-hist-open="${esc(h.draftId)}">Ouvrir le dossier</button>`:""}</div></article>`).join(""):`<div class="empty"><h3>Aucun envoi archivé</h3><p>Les messages marqués « envoyé » apparaîtront ici.</p></div>`}</div></div></section>`;
  document.querySelector("#clearHistory").onclick=()=>{if(confirm("Vider l’historique ?")){data.history=[];save();render()}};
  document.querySelectorAll("[data-hist-open]").forEach(b=>b.onclick=()=>openDraft(b.dataset.histOpen))
 }
@@ -495,6 +528,7 @@ document.querySelector("#confirmAriane").onclick=e=>{
 };
 
 render();
+publishScribeSnapshot("startup");
 </script>
 </body>
 </html>
