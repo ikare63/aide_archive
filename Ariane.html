@@ -46,7 +46,7 @@ dialog{border:1px solid #7e6744;background:#fff5cf;box-shadow:0 20px 60px #0005;
  <main class="sheet" id="sheet"></main>
 </div>
 </div>
-<script src="lenaic-bus.js?v=1"></script>
+<script src="lenaic-bus.js?v=2"></script>
 <script>
 const KEY="ariane-local-v2";
 const STATUSES=["À enquêter","Préparée","En cours","Terminée","Archivée"];
@@ -97,6 +97,15 @@ function processPistoriaInbox(){
  if(added){save();render();showPistoriaSyncNotice(`${added} enquête${added>1?'s':''} créée${added>1?'s':''} depuis Pistoria${last?` · ${last.title}`:''}.`)}
  return added;
 }
+function publishPistoriaResult(c){
+ if(!window.LenaicBus||c?.sourceApp!=="Pistoria"||!c.pistoriaInvestigationId||!c.pistoriaStepId)return;
+ if(!["Terminée","Archivée"].includes(c.status))return;
+ const resultKey=`${c.id}:${c.status}`;
+ const exists=LenaicBus.list({type:"ariane.case.result",source:"ariane",target:"pistoria"}).find(e=>e.payload?.resultKey===resultKey&&e.status==="pending");
+ if(exists)return;
+ LenaicBus.publish("ariane.case.result",{resultKey,caseId:c.id,title:c.title,status:c.status,pistoriaInvestigationId:c.pistoriaInvestigationId,pistoriaStepId:c.pistoriaStepId,sourceKey:c.sourceKey||"",completedAt:new Date().toISOString()},{source:"ariane",target:"pistoria"});
+ showPistoriaSyncNotice("Résultat transmis à Pistoria · validation demandée dans Pistoria.");
+}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function render(){
  const tabs=document.getElementById("tabs");tabs.innerHTML="";
@@ -116,7 +125,7 @@ function render(){
  </div>
  <section class="section"><h3>Pièces et cotes</h3><div class="items" id="items"></div></section>
  <div class="footnote">Les modifications sont sauvegardées dans le stockage local du navigateur. Pensez à exporter régulièrement un JSON de sauvegarde.</div>`;
- document.querySelectorAll("[data-case-field]").forEach(el=>el.oninput=()=>{c[el.dataset.caseField]=el.value;save();if(el.dataset.caseField==="title")renderTabsOnly()});
+ document.querySelectorAll("[data-case-field]").forEach(el=>el.oninput=()=>{const key=el.dataset.caseField,previous=c[key];c[key]=el.value;save();if(key==="title")renderTabsOnly();if(key==="status"&&previous!==c[key])publishPistoriaResult(c)});
  document.getElementById("addItem").onclick=()=>{c.items.push({id:uid(),label:"",cote:"",dossier:"",done:false,photographed:false,photoCount:0});save();renderItems(c)};
  document.getElementById("deleteCase").onclick=()=>{if(confirm("Supprimer ce dossier ?")){state.cases=state.cases.filter(x=>x.id!==c.id);state.activeId=state.cases[0]?.id||null;save();render()}};
  renderItems(c);
@@ -171,4 +180,5 @@ render();
 processPistoriaInbox();
 if(window.LenaicBus)LenaicBus.subscribe(()=>processPistoriaInbox());
 </script>
+<script src="lenaic-integration.js?v=2"></script>
 </body></html>
