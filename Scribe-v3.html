@@ -49,6 +49,23 @@ dialog{border:1px solid var(--line);background:var(--paper);border-radius:14px;b
 @media(max-width:970px){.layout{grid-template-columns:1fr}.preview{position:static}.route-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.shell{padding:11px}.brand p{display:none}.actions .btn{padding:8px 9px}.route-grid,.field-row,.method-grid,.field.three{grid-template-columns:1fr}.preview-actions{grid-template-columns:1fr}.contact-edit{grid-template-columns:1fr}.head,.body{padding:14px}.welcome{padding:16px}}
 @media print{header,.privacy,.nav,.assistant-col,.preview-actions{display:none!important}.layout{display:block}.panel{border:0;box-shadow:none}.preview{position:static}.letter{min-height:0}}
+
+/* ===== Sauvegarde privée GitHub : dépôt data ===== */
+.github-sync-btn{position:relative}
+.github-sync-btn::after{content:"";position:absolute;right:3px;bottom:3px;width:9px;height:9px;border-radius:50%;border:2px solid currentColor;background:#c98a18}
+.github-sync-btn[data-sync-state="ok"]::after{background:#218a4b}
+.github-sync-btn[data-sync-state="dirty"]::after{background:#c98a18}
+.github-sync-btn[data-sync-state="error"]::after{background:#b53b32}
+.github-sync-btn[data-sync-state="offline"]::after{background:#777}
+.github-sync-btn[data-sync-state="busy"]::after{background:#c98a18;animation:githubSyncPulse 1s infinite}
+@keyframes githubSyncPulse{50%{opacity:.3}}
+.github-sync-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
+.github-sync-grid label{display:grid;gap:5px;font-size:11px;font-weight:800}
+.github-sync-grid input{width:100%}
+.github-sync-grid .wide{grid-column:1/-1}
+.github-sync-help{font-size:12px;line-height:1.5;margin:0 0 10px}
+@media(max-width:620px){.github-sync-grid{grid-template-columns:1fr}.github-sync-grid .wide{grid-column:auto}}
+
 </style>
 </head>
 <body>
@@ -59,9 +76,10 @@ dialog{border:1px solid var(--line);background:var(--paper);border-radius:14px;b
    <button class="btn primary" id="importBtn">Importer Scribe</button>
    <button class="btn" id="arianeBtn">Depuis Ariane</button>
    <button class="btn" id="exportBtn">Exporter JSON</button>
+   <button class="btn github-sync-btn" id="githubSyncBtn" type="button" data-sync-state="dirty">GitHub</button>
  </div>
 </header>
-<div class="privacy">🔒 <strong>Aucune donnée personnelle n’est intégrée au HTML.</strong> Les fichiers Scribe et Ariane sont lus localement. Scribe n’effectue aucune requête réseau tant que vous n’utilisez pas volontairement Gmail ou votre application de messagerie.</div>
+<div class="privacy">🔒 <strong>Aucune donnée personnelle n’est intégrée au HTML.</strong> Les fichiers Scribe et Ariane sont lus localement. Une requête réseau n’est effectuée que lorsque vous utilisez volontairement Gmail, votre messagerie ou la synchronisation vers le dépôt GitHub privé <code>data</code>.</div>
 <input id="fileInput" type="file" accept=".json,application/json" hidden>
 <input id="arianeInput" type="file" accept=".json,application/json" hidden>
 
@@ -75,6 +93,21 @@ dialog{border:1px solid var(--line);background:var(--paper);border-radius:14px;b
 <div id="view"></div>
 </div>
 
+
+<dialog id="githubSyncDialog">
+ <form id="githubSyncForm">
+  <h3 style="font:700 21px Georgia;margin-top:0">Synchroniser Scribe avec GitHub</h3>
+  <p class="github-sync-help">Scribe continue de travailler dans le stockage local. Cette action envoie ou récupère sa sauvegarde dans le dépôt privé <code>ikare63/data</code>. Le jeton reste uniquement dans la session du navigateur.</p>
+  <div class="github-sync-grid">
+   <label>Propriétaire<input name="owner" required></label>
+   <label>Dépôt<input name="repo" required></label>
+   <label>Branche<input name="branch" required></label>
+   <label>Fichier JSON<input name="path" required></label>
+   <label class="wide">Jeton GitHub à portée fine<input type="password" name="token" autocomplete="off"><small>Contents — Read and write sur le dépôt privé data.</small></label>
+  </div>
+  <div class="toolbar"><button class="btn primary" type="submit">Synchroniser maintenant</button><button class="btn" type="button" id="githubSyncCancel">Annuler</button></div>
+ </form>
+</dialog>
 <dialog id="arianeDialog">
  <form method="dialog">
   <h3 style="font:700 21px Georgia;margin-top:0">Importer un dossier Ariane</h3>
@@ -87,6 +120,7 @@ dialog{border:1px solid var(--line);background:var(--paper);border-radius:14px;b
 <script src="lenaic-bus.js?v=2"></script>
 <script>
 const KEY="scribe-local-v3";
+const SCRIBE_GITHUB_FILE="scribe.json",SCRIBE_GITHUB_META_KEY="scribe-github-sync-v1";
 const SCRIBE_SNAPSHOT_KEY="lenaic-scribe-snapshot-v1";
 const OLD_KEY="scribe-local-v2";
 const uid=()=>crypto?.randomUUID?.()||("id-"+Date.now()+"-"+Math.random().toString(16).slice(2));
@@ -200,7 +234,7 @@ function publishScribeEvent(type,d,payload={}){
  if(!window.LenaicBus||!d)return;
  LenaicBus.publish(type,{draftId:d.id,title:d.title||"Demande aux archives",contact:scribeContactLabel(d),status:d.status,sentAt:d.sentAt||null,receivedAt:d.receivedAt||null,...payload},{source:"scribe",target:"3615"});
 }
-function save(){localStorage.setItem(KEY,JSON.stringify(data));publishScribeSnapshot("save")}
+function save(options={}){localStorage.setItem(KEY,JSON.stringify(data));publishScribeSnapshot("save");if(options.markDirty!==false)scribeGithubMarkDirty()}
 
 function download(name,obj){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},600)}
 
@@ -297,7 +331,35 @@ function readiness(){
  return {score,missing}
 }
 
-function renderNav(){document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===activeTab))}
+function renderNav(){
+/* ---------- Sauvegarde privée GitHub : Scribe ---------- */
+const scribe_GITHUB_FILE="scribe.json";
+const scribe_GITHUB_META_KEY="scribe-github-sync-v1";
+const scribe_GITHUB_TOKEN_KEYS=['ecosystem-github-token-v1','bureau-genealogique-github-token-v1','scriptoria-github-token-v2'];
+function scribeGithubNow(){return new Date().toISOString()}
+function scribeGithubReadMeta(){try{return JSON.parse(localStorage.getItem(scribe_GITHUB_META_KEY)||'{}')}catch{return {}}}
+function scribeGithubWriteMeta(patch){const next={...scribeGithubReadMeta(),...patch};localStorage.setItem(scribe_GITHUB_META_KEY,JSON.stringify(next));scribeGithubRefreshStatus();return next}
+function scribeGithubMarkDirty(){const m=scribeGithubReadMeta();scribeGithubWriteMeta({dirty:true,localChangedAt:scribeGithubNow(),lastSyncAt:m.lastSyncAt||''})}
+function scribeGithubToken(){for(const key of scribe_GITHUB_TOKEN_KEYS){const token=sessionStorage.getItem(key);if(token)return token}return ''}
+function scribeGithubSetToken(token){if(!token)return;for(const key of scribe_GITHUB_TOKEN_KEYS)sessionStorage.setItem(key,token)}
+function scribeGithubConfig(){const m=scribeGithubReadMeta(),host=location.hostname.match(/^([^.]+)\.github\.io$/i);return{owner:m.owner||host?.[1]||'ikare63',repo:m.repo||'data',branch:m.branch||'main',path:m.path||scribe_GITHUB_FILE}}
+function scribeGithubRefreshStatus(){const b=document.getElementById('githubSyncBtn');if(!b)return;const m=scribeGithubReadMeta();let status=!navigator.onLine?'offline':m.dirty?'dirty':m.lastSyncAt?'ok':'dirty';b.dataset.syncState=status;b.title=status==='ok'?`GitHub synchronisé · ${new Date(m.lastSyncAt).toLocaleString('fr-FR')}`:status==='offline'?'GitHub — hors connexion':'GitHub — sauvegarde à synchroniser';b.setAttribute('aria-label',b.title)}
+async function scribeGithubApi(url,options={}){const token=scribeGithubToken();if(!token)throw new Error('Aucun jeton GitHub fourni.');const headers=new Headers(options.headers||{});headers.set('Accept','application/vnd.github+json');headers.set('Authorization',`Bearer ${token}`);headers.set('X-GitHub-Api-Version','2022-11-28');const res=await fetch(url,{...options,headers});if(res.status===401||res.status===403)throw new Error('Jeton GitHub refusé ou permission Contents insuffisante.');return res}
+function scribeGithubApiUrl(cfg){return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(cfg.branch)}`}
+function scribeGithubBase64ToText(value){const binary=atob(String(value||'').replace(/\s/g,''));const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));return new TextDecoder().decode(bytes)}
+function scribeGithubTextToBase64(text){const bytes=new TextEncoder().encode(text);let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary)}
+async function scribeGithubRead(cfg){const api=scribeGithubApiUrl(cfg);const res=await scribeGithubApi(api);if(res.status===404)return{sha:'',doc:null};if(!res.ok)throw new Error(`Lecture GitHub impossible (${res.status}).`);const info=await res.json();let text='';if(info.content)text=scribeGithubBase64ToText(info.content);else{const raw=await scribeGithubApi(api,{headers:{Accept:'application/vnd.github.raw'}});if(!raw.ok)throw new Error(`Lecture de scribe.json impossible (${raw.status}).`);text=await raw.text()}let doc;try{doc=JSON.parse(text)}catch{throw new Error('Le fichier JSON présent sur GitHub est illisible.')}return{sha:info.sha||'',doc}}
+function scribeGithubValid(doc){return !!doc&&(Array.isArray(doc.drafts)&&Array.isArray(doc.contacts))}
+function scribeGithubFreshness(doc){return Date.parse(doc?.githubSyncUpdatedAt||doc?.exportedAt||'')||0}
+async function scribeGithubLoadRemote(doc,cfg,sha){data=cleanV3(doc);save({markDirty:false});const at=scribeGithubNow();scribeGithubWriteMeta({owner:cfg.owner,repo:cfg.repo,branch:cfg.branch,path:cfg.path,dirty:false,lastSyncAt:at,localChangedAt:at,lastRemoteSha:sha||''});render();alert('La version GitHub de Scribe a été chargée sur cet appareil.')}
+async function scribeGithubSync(cfgOverride={}){if(!navigator.onLine)throw new Error('Connexion Internet indisponible.');const cfg={...scribeGithubConfig(),...cfgOverride},button=document.getElementById('githubSyncBtn');if(button)button.dataset.syncState='busy';const remote=await scribeGithubRead(cfg),remoteDoc=scribeGithubValid(remote.doc)?remote.doc:null,meta=scribeGithubReadMeta();const remoteTime=scribeGithubFreshness(remoteDoc),localChanged=Date.parse(meta.localChangedAt||'')||0,lastSync=Date.parse(meta.lastSyncAt||'')||0,remoteChangedSinceLastSync=!!(meta.lastRemoteSha&&remote.sha&&meta.lastRemoteSha!==remote.sha);const localHas=!!(data&&Array.isArray(data.drafts)&&(data.drafts.length||data.contacts?.length||data.history?.length)),remoteHas=!!remoteDoc;if(remoteChangedSinceLastSync&&meta.dirty&&localHas){scribeGithubRefreshStatus();throw new Error('La sauvegarde GitHub a changé depuis la dernière synchronisation et des modifications locales existent aussi. Exporte d’abord ton JSON local pour éviter tout écrasement.')}if(remoteHas&&(remoteChangedSinceLastSync||remoteTime>Math.max(lastSync,localChanged))){if(meta.dirty&&localHas){scribeGithubRefreshStatus();throw new Error('La copie GitHub est plus récente alors que des modifications locales existent. Exporte d’abord ton JSON local ou charge volontairement GitHub après vérification.')}const ok=confirm(`La sauvegarde GitHub de Scribe semble plus récente.\n\nOK : charger GitHub sur cet appareil.\nAnnuler : ne rien modifier.`);if(ok){await scribeGithubLoadRemote(remoteDoc,cfg,remote.sha);return true}scribeGithubRefreshStatus();return false}const syncAt=scribeGithubNow(),payload=JSON.parse(JSON.stringify(data));payload.exportedAt=syncAt;payload.githubSyncUpdatedAt=syncAt;const content=scribeGithubTextToBase64(JSON.stringify(payload,null,2));const api=`https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split('/').map(encodeURIComponent).join('/')}`;const body={message:`Scribe — sauvegarde ${new Date().toLocaleDateString('fr-FR')}`,content,branch:cfg.branch};if(remote.sha)body.sha=remote.sha;const res=await scribeGithubApi(api,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!res.ok){let detail='';try{detail=(await res.json())?.message||''}catch{}throw new Error(detail||`Écriture GitHub impossible (${res.status}).`)}const result=await res.json();scribeGithubWriteMeta({owner:cfg.owner,repo:cfg.repo,branch:cfg.branch,path:cfg.path,dirty:false,lastSyncAt:syncAt,localChangedAt:syncAt,lastCommitSha:result.commit?.sha||'',lastRemoteSha:result.content?.sha||remote.sha||''});alert('Scribe sauvegardé dans data/scribe.json.');return true}
+function scribeOpenGithubDialog(){const cfg=scribeGithubConfig(),dialog=document.getElementById('githubSyncDialog'),form=document.getElementById('githubSyncForm');form.elements.owner.value=cfg.owner;form.elements.repo.value=cfg.repo;form.elements.branch.value=cfg.branch;form.elements.path.value=cfg.path;form.elements.token.value='';form.elements.token.placeholder=scribeGithubToken()?'Jeton déjà chargé pour cette session':'github_pat_…';dialog.showModal()}
+document.getElementById('githubSyncBtn')?.addEventListener('click',scribeOpenGithubDialog);
+document.getElementById('githubSyncCancel')?.addEventListener('click',()=>document.getElementById('githubSyncDialog').close());
+document.getElementById('githubSyncForm')?.addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,fd=new FormData(form),token=String(fd.get('token')||'').trim();if(token)scribeGithubSetToken(token);if(!scribeGithubToken())return alert('Jeton GitHub requis.');const cfg={owner:String(fd.get('owner')||'').trim(),repo:String(fd.get('repo')||'').trim(),branch:String(fd.get('branch')||'main').trim(),path:String(fd.get('path')||scribe_GITHUB_FILE).trim()};scribeGithubWriteMeta(cfg);const submit=form.querySelector('[type="submit"]');submit.disabled=true;try{await scribeGithubSync(cfg);document.getElementById('githubSyncDialog').close()}catch(error){console.error(error);const b=document.getElementById('githubSyncBtn');if(b)b.dataset.syncState='error';alert('Synchronisation impossible : '+(error?.message||'erreur inconnue'))}finally{submit.disabled=false}});
+window.addEventListener('online',scribeGithubRefreshStatus);window.addEventListener('offline',scribeGithubRefreshStatus);scribeGithubRefreshStatus();
+
+document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===activeTab))}
 function render(){renderNav();const view=document.querySelector("#view");if(activeTab==="assistant")renderAssistant(view);else if(activeTab==="drafts")renderDrafts(view);else if(activeTab==="contacts")renderContacts(view);else renderHistory(view)}
 
 function renderAssistant(view){
