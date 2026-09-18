@@ -26,6 +26,23 @@ dialog{border:1px solid #7e6744;background:#fff5cf;box-shadow:0 20px 60px #0005;
 .sync-notice{margin:0 0 14px;padding:10px 12px;border:1px solid #9a7a48;border-radius:8px;background:#fff3c7;color:#4a351e;font-size:12px;font-weight:700}.sync-notice[hidden]{display:none}
 @media(max-width:760px){.app{padding:10px}header{align-items:flex-start}.brand p{display:none}.actions{justify-content:flex-end}.sheet{padding:15px}.grid{grid-template-columns:1fr}.full{grid-column:auto}.item{grid-template-columns:30px 1fr}.item .cote,.item .dossier,.item .photo,.item .del{grid-column:2}.folder{min-height:520px}}
 @media print{body{background:white}.actions,.privacy,.tabs,.case-actions,.del{display:none!important}.app{max-width:none;padding:0}.folder{border:0;box-shadow:none}.sheet{padding:0}}
+
+/* ===== Sauvegarde privée GitHub : dépôt data ===== */
+.github-sync-btn{position:relative}
+.github-sync-btn::after{content:"";position:absolute;right:3px;bottom:3px;width:9px;height:9px;border-radius:50%;border:2px solid currentColor;background:#c98a18}
+.github-sync-btn[data-sync-state="ok"]::after{background:#218a4b}
+.github-sync-btn[data-sync-state="dirty"]::after{background:#c98a18}
+.github-sync-btn[data-sync-state="error"]::after{background:#b53b32}
+.github-sync-btn[data-sync-state="offline"]::after{background:#777}
+.github-sync-btn[data-sync-state="busy"]::after{background:#c98a18;animation:githubSyncPulse 1s infinite}
+@keyframes githubSyncPulse{50%{opacity:.3}}
+.github-sync-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
+.github-sync-grid label{display:grid;gap:5px;font-size:11px;font-weight:800}
+.github-sync-grid input{width:100%}
+.github-sync-grid .wide{grid-column:1/-1}
+.github-sync-help{font-size:12px;line-height:1.5;margin:0 0 10px}
+@media(max-width:620px){.github-sync-grid{grid-template-columns:1fr}.github-sync-grid .wide{grid-column:auto}}
+
 </style>
 </head>
 <body>
@@ -35,12 +52,28 @@ dialog{border:1px solid #7e6744;background:#fff5cf;box-shadow:0 20px 60px #0005;
  <div class="actions">
   <button class="btn dark" id="importBtn">Importer JSON</button>
   <button class="btn" id="exportBtn">Exporter JSON</button>
+  <button class="btn github-sync-btn" id="githubSyncBtn" type="button" data-sync-state="dirty">GitHub</button>
   <button class="btn" id="newCaseBtn">+ Dossier</button>
  </div>
 </header>
-<div class="privacy">🔒 <strong>HTML sans données privées.</strong> Ce fichier ne contient aucun dossier préchargé. Les JSON choisis sont lus localement par votre navigateur puis enregistrés uniquement dans son stockage local.</div>
+<div class="privacy">🔒 <strong>HTML sans données privées.</strong> Les dossiers restent dans ce navigateur. La synchronisation vers le dépôt GitHub privé <code>data</code> n’a lieu que lorsque vous utilisez volontairement le bouton GitHub.</div>
 <div class="sync-notice" id="pistoriaSyncNotice" hidden></div>
 <input id="fileInput" type="file" accept=".json,application/json" hidden>
+
+<dialog id="githubSyncDialog">
+ <form id="githubSyncForm">
+  <h3 style="font:700 21px Georgia;margin-top:0">Synchroniser Ariane avec GitHub</h3>
+  <p class="github-sync-help">Ariane continue de travailler dans le stockage local. Cette action envoie ou récupère sa sauvegarde dans le dépôt privé <code>ikare63/data</code>. Le jeton reste uniquement dans la session du navigateur.</p>
+  <div class="github-sync-grid">
+   <label>Propriétaire<input name="owner" required></label>
+   <label>Dépôt<input name="repo" required></label>
+   <label>Branche<input name="branch" required></label>
+   <label>Fichier JSON<input name="path" required></label>
+   <label class="wide">Jeton GitHub à portée fine<input type="password" name="token" autocomplete="off"><small>Contents — Read and write sur le dépôt privé data.</small></label>
+  </div>
+  <div class="actions"><button class="btn dark" type="submit">Synchroniser maintenant</button><button class="btn" type="button" id="githubSyncCancel">Annuler</button></div>
+ </form>
+</dialog>
 <div class="folder">
  <nav class="tabs" id="tabs"></nav>
  <main class="sheet" id="sheet"></main>
@@ -49,6 +82,7 @@ dialog{border:1px solid #7e6744;background:#fff5cf;box-shadow:0 20px 60px #0005;
 <script src="lenaic-bus.js?v=2"></script>
 <script>
 const KEY="ariane-local-v2";
+const ARIANE_GITHUB_FILE="ariane.json",ARIANE_GITHUB_META_KEY="ariane-github-sync-v1";
 const STATUSES=["À enquêter","Préparée","En cours","Terminée","Archivée"];
 const uid=()=>crypto?.randomUUID?.()||("id-"+Date.now()+"-"+Math.random().toString(16).slice(2));
 let state=load();
@@ -65,7 +99,7 @@ function clean(data){
  return {app:"Ariane",version:2,cases:data.cases,activeId:data.activeId};
 }
 function load(){try{const x=localStorage.getItem(KEY);return x?clean(JSON.parse(x)):{app:"Ariane",version:2,cases:[],activeId:null}}catch(e){return{app:"Ariane",version:2,cases:[],activeId:null}}}
-function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+function save(options={}){localStorage.setItem(KEY,JSON.stringify(state));if(options.markDirty!==false)arianeGithubMarkDirty();}
 function active(){return state.cases.find(c=>c.id===state.activeId)||null}
 
 
@@ -124,7 +158,7 @@ function render(){
   ${field("goal","Objectif",c.goal,"textarea","full")}${field("notes","Notes / méthode",c.notes,"textarea","full")}
  </div>
  <section class="section"><h3>Pièces et cotes</h3><div class="items" id="items"></div></section>
- <div class="footnote">Les modifications sont sauvegardées dans le stockage local du navigateur. Pensez à exporter régulièrement un JSON de sauvegarde.</div>`;
+ <div class="footnote">Les modifications sont sauvegardées localement. Le bouton GitHub permet d’en conserver une copie privée versionnée dans data/ariane.json.</div>`;
  document.querySelectorAll("[data-case-field]").forEach(el=>el.oninput=()=>{const key=el.dataset.caseField,previous=c[key];c[key]=el.value;save();if(key==="title")renderTabsOnly();if(key==="status"&&previous!==c[key])publishPistoriaResult(c)});
  document.getElementById("addItem").onclick=()=>{c.items.push({id:uid(),label:"",cote:"",dossier:"",done:false,photographed:false,photoCount:0});save();renderItems(c)};
  document.getElementById("deleteCase").onclick=()=>{if(confirm("Supprimer ce dossier ?")){state.cases=state.cases.filter(x=>x.id!==c.id);state.activeId=state.cases[0]?.id||null;save();render()}};
@@ -166,6 +200,34 @@ function download(name,obj){
  a.href=url;a.download=name;a.style.display="none";document.body.appendChild(a);a.click();a.remove();
  setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
+
+/* ---------- Sauvegarde privée GitHub : Ariane ---------- */
+const ariane_GITHUB_FILE="ariane.json";
+const ariane_GITHUB_META_KEY="ariane-github-sync-v1";
+const ariane_GITHUB_TOKEN_KEYS=['ecosystem-github-token-v1','bureau-genealogique-github-token-v1','scriptoria-github-token-v2'];
+function arianeGithubNow(){return new Date().toISOString()}
+function arianeGithubReadMeta(){try{return JSON.parse(localStorage.getItem(ariane_GITHUB_META_KEY)||'{}')}catch{return {}}}
+function arianeGithubWriteMeta(patch){const next={...arianeGithubReadMeta(),...patch};localStorage.setItem(ariane_GITHUB_META_KEY,JSON.stringify(next));arianeGithubRefreshStatus();return next}
+function arianeGithubMarkDirty(){const m=arianeGithubReadMeta();arianeGithubWriteMeta({dirty:true,localChangedAt:arianeGithubNow(),lastSyncAt:m.lastSyncAt||''})}
+function arianeGithubToken(){for(const key of ariane_GITHUB_TOKEN_KEYS){const token=sessionStorage.getItem(key);if(token)return token}return ''}
+function arianeGithubSetToken(token){if(!token)return;for(const key of ariane_GITHUB_TOKEN_KEYS)sessionStorage.setItem(key,token)}
+function arianeGithubConfig(){const m=arianeGithubReadMeta(),host=location.hostname.match(/^([^.]+)\.github\.io$/i);return{owner:m.owner||host?.[1]||'ikare63',repo:m.repo||'data',branch:m.branch||'main',path:m.path||ariane_GITHUB_FILE}}
+function arianeGithubRefreshStatus(){const b=document.getElementById('githubSyncBtn');if(!b)return;const m=arianeGithubReadMeta();let status=!navigator.onLine?'offline':m.dirty?'dirty':m.lastSyncAt?'ok':'dirty';b.dataset.syncState=status;b.title=status==='ok'?`GitHub synchronisé · ${new Date(m.lastSyncAt).toLocaleString('fr-FR')}`:status==='offline'?'GitHub — hors connexion':'GitHub — sauvegarde à synchroniser';b.setAttribute('aria-label',b.title)}
+async function arianeGithubApi(url,options={}){const token=arianeGithubToken();if(!token)throw new Error('Aucun jeton GitHub fourni.');const headers=new Headers(options.headers||{});headers.set('Accept','application/vnd.github+json');headers.set('Authorization',`Bearer ${token}`);headers.set('X-GitHub-Api-Version','2022-11-28');const res=await fetch(url,{...options,headers});if(res.status===401||res.status===403)throw new Error('Jeton GitHub refusé ou permission Contents insuffisante.');return res}
+function arianeGithubApiUrl(cfg){return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(cfg.branch)}`}
+function arianeGithubBase64ToText(value){const binary=atob(String(value||'').replace(/\s/g,''));const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));return new TextDecoder().decode(bytes)}
+function arianeGithubTextToBase64(text){const bytes=new TextEncoder().encode(text);let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary)}
+async function arianeGithubRead(cfg){const api=arianeGithubApiUrl(cfg);const res=await arianeGithubApi(api);if(res.status===404)return{sha:'',doc:null};if(!res.ok)throw new Error(`Lecture GitHub impossible (${res.status}).`);const info=await res.json();let text='';if(info.content)text=arianeGithubBase64ToText(info.content);else{const raw=await arianeGithubApi(api,{headers:{Accept:'application/vnd.github.raw'}});if(!raw.ok)throw new Error(`Lecture de ariane.json impossible (${raw.status}).`);text=await raw.text()}let doc;try{doc=JSON.parse(text)}catch{throw new Error('Le fichier JSON présent sur GitHub est illisible.')}return{sha:info.sha||'',doc}}
+function arianeGithubValid(doc){return !!doc&&(Array.isArray(doc.cases))}
+function arianeGithubFreshness(doc){return Date.parse(doc?.githubSyncUpdatedAt||doc?.exportedAt||'')||0}
+async function arianeGithubLoadRemote(doc,cfg,sha){state=clean(doc);save({markDirty:false});const at=arianeGithubNow();arianeGithubWriteMeta({owner:cfg.owner,repo:cfg.repo,branch:cfg.branch,path:cfg.path,dirty:false,lastSyncAt:at,localChangedAt:at,lastRemoteSha:sha||''});render();alert('La version GitHub de Ariane a été chargée sur cet appareil.')}
+async function arianeGithubSync(cfgOverride={}){if(!navigator.onLine)throw new Error('Connexion Internet indisponible.');const cfg={...arianeGithubConfig(),...cfgOverride},button=document.getElementById('githubSyncBtn');if(button)button.dataset.syncState='busy';const remote=await arianeGithubRead(cfg),remoteDoc=arianeGithubValid(remote.doc)?remote.doc:null,meta=arianeGithubReadMeta();const remoteTime=arianeGithubFreshness(remoteDoc),localChanged=Date.parse(meta.localChangedAt||'')||0,lastSync=Date.parse(meta.lastSyncAt||'')||0,remoteChangedSinceLastSync=!!(meta.lastRemoteSha&&remote.sha&&meta.lastRemoteSha!==remote.sha);const localHas=!!(state&&Array.isArray(state.cases)&&state.cases.length),remoteHas=!!remoteDoc;if(remoteChangedSinceLastSync&&meta.dirty&&localHas){arianeGithubRefreshStatus();throw new Error('La sauvegarde GitHub a changé depuis la dernière synchronisation et des modifications locales existent aussi. Exporte d’abord ton JSON local pour éviter tout écrasement.')}if(remoteHas&&(remoteChangedSinceLastSync||remoteTime>Math.max(lastSync,localChanged))){if(meta.dirty&&localHas){arianeGithubRefreshStatus();throw new Error('La copie GitHub est plus récente alors que des modifications locales existent. Exporte d’abord ton JSON local ou charge volontairement GitHub après vérification.')}const ok=confirm(`La sauvegarde GitHub de Ariane semble plus récente.\n\nOK : charger GitHub sur cet appareil.\nAnnuler : ne rien modifier.`);if(ok){await arianeGithubLoadRemote(remoteDoc,cfg,remote.sha);return true}arianeGithubRefreshStatus();return false}const syncAt=arianeGithubNow(),payload=JSON.parse(JSON.stringify(state));payload.exportedAt=syncAt;payload.githubSyncUpdatedAt=syncAt;const content=arianeGithubTextToBase64(JSON.stringify(payload,null,2));const api=`https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split('/').map(encodeURIComponent).join('/')}`;const body={message:`Ariane — sauvegarde ${new Date().toLocaleDateString('fr-FR')}`,content,branch:cfg.branch};if(remote.sha)body.sha=remote.sha;const res=await arianeGithubApi(api,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!res.ok){let detail='';try{detail=(await res.json())?.message||''}catch{}throw new Error(detail||`Écriture GitHub impossible (${res.status}).`)}const result=await res.json();arianeGithubWriteMeta({owner:cfg.owner,repo:cfg.repo,branch:cfg.branch,path:cfg.path,dirty:false,lastSyncAt:syncAt,localChangedAt:syncAt,lastCommitSha:result.commit?.sha||'',lastRemoteSha:result.content?.sha||remote.sha||''});alert('Ariane sauvegardé dans data/ariane.json.');return true}
+function arianeOpenGithubDialog(){const cfg=arianeGithubConfig(),dialog=document.getElementById('githubSyncDialog'),form=document.getElementById('githubSyncForm');form.elements.owner.value=cfg.owner;form.elements.repo.value=cfg.repo;form.elements.branch.value=cfg.branch;form.elements.path.value=cfg.path;form.elements.token.value='';form.elements.token.placeholder=arianeGithubToken()?'Jeton déjà chargé pour cette session':'github_pat_…';dialog.showModal()}
+document.getElementById('githubSyncBtn')?.addEventListener('click',arianeOpenGithubDialog);
+document.getElementById('githubSyncCancel')?.addEventListener('click',()=>document.getElementById('githubSyncDialog').close());
+document.getElementById('githubSyncForm')?.addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,fd=new FormData(form),token=String(fd.get('token')||'').trim();if(token)arianeGithubSetToken(token);if(!arianeGithubToken())return alert('Jeton GitHub requis.');const cfg={owner:String(fd.get('owner')||'').trim(),repo:String(fd.get('repo')||'').trim(),branch:String(fd.get('branch')||'main').trim(),path:String(fd.get('path')||ariane_GITHUB_FILE).trim()};arianeGithubWriteMeta(cfg);const submit=form.querySelector('[type="submit"]');submit.disabled=true;try{await arianeGithubSync(cfg);document.getElementById('githubSyncDialog').close()}catch(error){console.error(error);const b=document.getElementById('githubSyncBtn');if(b)b.dataset.syncState='error';alert('Synchronisation impossible : '+(error?.message||'erreur inconnue'))}finally{submit.disabled=false}});
+window.addEventListener('online',arianeGithubRefreshStatus);window.addEventListener('offline',arianeGithubRefreshStatus);arianeGithubRefreshStatus();
+
 document.getElementById("importBtn").onclick=()=>document.getElementById("fileInput").click();
 document.getElementById("fileInput").onchange=e=>{
  const f=e.target.files&&e.target.files[0];if(!f)return;
