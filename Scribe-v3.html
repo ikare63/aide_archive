@@ -67,6 +67,7 @@ dialog{border:1px solid var(--line);background:var(--paper);border-radius:14px;b
 @media(max-width:620px){.github-sync-grid{grid-template-columns:1fr}.github-sync-grid .wide{grid-column:auto}}
 
 </style>
+<script src="lenaic-sync.js?v=20261028-safe-sync"></script>
 </head>
 <body>
 <div class="shell">
@@ -234,7 +235,7 @@ function publishScribeEvent(type,d,payload={}){
  if(!window.LenaicBus||!d)return;
  LenaicBus.publish(type,{draftId:d.id,title:d.title||"Demande aux archives",contact:scribeContactLabel(d),status:d.status,sentAt:d.sentAt||null,receivedAt:d.receivedAt||null,...payload},{source:"scribe",target:"3615"});
 }
-function save(options={}){localStorage.setItem(KEY,JSON.stringify(data));publishScribeSnapshot("save");if(options.markDirty!==false)scribeGithubMarkDirty()}
+function save(options={}){window.LenaicSync?.localChange('scribe');localStorage.setItem(KEY,JSON.stringify(data));publishScribeSnapshot("save");if(options.markDirty!==false)scribeGithubMarkDirty()}
 
 function download(name,obj){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},600)}
 
@@ -331,7 +332,6 @@ function readiness(){
  return {score,missing}
 }
 
-function renderNav(){
 /* ---------- Sauvegarde privée GitHub : Scribe ---------- */
 const scribe_GITHUB_FILE="scribe.json";
 const scribe_GITHUB_META_KEY="scribe-github-sync-v1";
@@ -344,21 +344,15 @@ function scribeGithubToken(){for(const key of scribe_GITHUB_TOKEN_KEYS){const to
 function scribeGithubSetToken(token){if(!token)return;for(const key of scribe_GITHUB_TOKEN_KEYS)sessionStorage.setItem(key,token)}
 function scribeGithubConfig(){const m=scribeGithubReadMeta(),host=location.hostname.match(/^([^.]+)\.github\.io$/i);return{owner:m.owner||host?.[1]||'ikare63',repo:m.repo||'data',branch:m.branch||'main',path:m.path||scribe_GITHUB_FILE}}
 function scribeGithubRefreshStatus(){const b=document.getElementById('githubSyncBtn');if(!b)return;const m=scribeGithubReadMeta();let status=!navigator.onLine?'offline':m.dirty?'dirty':m.lastSyncAt?'ok':'dirty';b.dataset.syncState=status;b.title=status==='ok'?`GitHub synchronisé · ${new Date(m.lastSyncAt).toLocaleString('fr-FR')}`:status==='offline'?'GitHub — hors connexion':'GitHub — sauvegarde à synchroniser';b.setAttribute('aria-label',b.title)}
-async function scribeGithubApi(url,options={}){const token=scribeGithubToken();if(!token)throw new Error('Aucun jeton GitHub fourni.');const headers=new Headers(options.headers||{});headers.set('Accept','application/vnd.github+json');headers.set('Authorization',`Bearer ${token}`);headers.set('X-GitHub-Api-Version','2022-11-28');const res=await fetch(url,{...options,headers});if(res.status===401||res.status===403)throw new Error('Jeton GitHub refusé ou permission Contents insuffisante.');return res}
-function scribeGithubApiUrl(cfg){return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(cfg.branch)}`}
-function scribeGithubBase64ToText(value){const binary=atob(String(value||'').replace(/\s/g,''));const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));return new TextDecoder().decode(bytes)}
-function scribeGithubTextToBase64(text){const bytes=new TextEncoder().encode(text);let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary)}
-async function scribeGithubRead(cfg){const api=scribeGithubApiUrl(cfg);const res=await scribeGithubApi(api);if(res.status===404)return{sha:'',doc:null};if(!res.ok)throw new Error(`Lecture GitHub impossible (${res.status}).`);const info=await res.json();let text='';if(info.content)text=scribeGithubBase64ToText(info.content);else{const raw=await scribeGithubApi(api,{headers:{Accept:'application/vnd.github.raw'}});if(!raw.ok)throw new Error(`Lecture de scribe.json impossible (${raw.status}).`);text=await raw.text()}let doc;try{doc=JSON.parse(text)}catch{throw new Error('Le fichier JSON présent sur GitHub est illisible.')}return{sha:info.sha||'',doc}}
-function scribeGithubValid(doc){return !!doc&&(Array.isArray(doc.drafts)&&Array.isArray(doc.contacts))}
-function scribeGithubFreshness(doc){return Date.parse(doc?.githubSyncUpdatedAt||doc?.exportedAt||'')||0}
-async function scribeGithubLoadRemote(doc,cfg,sha){data=cleanV3(doc);save({markDirty:false});const at=scribeGithubNow();scribeGithubWriteMeta({owner:cfg.owner,repo:cfg.repo,branch:cfg.branch,path:cfg.path,dirty:false,lastSyncAt:at,localChangedAt:at,lastRemoteSha:sha||''});render();alert('La version GitHub de Scribe a été chargée sur cet appareil.')}
-async function scribeGithubSync(cfgOverride={}){if(!navigator.onLine)throw new Error('Connexion Internet indisponible.');const cfg={...scribeGithubConfig(),...cfgOverride},button=document.getElementById('githubSyncBtn');if(button)button.dataset.syncState='busy';const remote=await scribeGithubRead(cfg),remoteDoc=scribeGithubValid(remote.doc)?remote.doc:null,meta=scribeGithubReadMeta();const remoteTime=scribeGithubFreshness(remoteDoc),localChanged=Date.parse(meta.localChangedAt||'')||0,lastSync=Date.parse(meta.lastSyncAt||'')||0,remoteChangedSinceLastSync=!!(meta.lastRemoteSha&&remote.sha&&meta.lastRemoteSha!==remote.sha);const localHas=!!(data&&Array.isArray(data.drafts)&&(data.drafts.length||data.contacts?.length||data.history?.length)),remoteHas=!!remoteDoc;if(remoteChangedSinceLastSync&&meta.dirty&&localHas){scribeGithubRefreshStatus();throw new Error('La sauvegarde GitHub a changé depuis la dernière synchronisation et des modifications locales existent aussi. Exporte d’abord ton JSON local pour éviter tout écrasement.')}if(remoteHas&&(remoteChangedSinceLastSync||remoteTime>Math.max(lastSync,localChanged))){if(meta.dirty&&localHas){scribeGithubRefreshStatus();throw new Error('La copie GitHub est plus récente alors que des modifications locales existent. Exporte d’abord ton JSON local ou charge volontairement GitHub après vérification.')}const ok=confirm(`La sauvegarde GitHub de Scribe semble plus récente.\n\nOK : charger GitHub sur cet appareil.\nAnnuler : ne rien modifier.`);if(ok){await scribeGithubLoadRemote(remoteDoc,cfg,remote.sha);return true}scribeGithubRefreshStatus();return false}const syncAt=scribeGithubNow(),payload=JSON.parse(JSON.stringify(data));payload.exportedAt=syncAt;payload.githubSyncUpdatedAt=syncAt;const content=scribeGithubTextToBase64(JSON.stringify(payload,null,2));const api=`https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split('/').map(encodeURIComponent).join('/')}`;const body={message:`Scribe — sauvegarde ${new Date().toLocaleDateString('fr-FR')}`,content,branch:cfg.branch};if(remote.sha)body.sha=remote.sha;const res=await scribeGithubApi(api,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!res.ok){let detail='';try{detail=(await res.json())?.message||''}catch{}throw new Error(detail||`Écriture GitHub impossible (${res.status}).`)}const result=await res.json();scribeGithubWriteMeta({owner:cfg.owner,repo:cfg.repo,branch:cfg.branch,path:cfg.path,dirty:false,lastSyncAt:syncAt,localChangedAt:syncAt,lastCommitSha:result.commit?.sha||'',lastRemoteSha:result.content?.sha||remote.sha||''});alert('Scribe sauvegardé dans data/scribe.json.');return true}
+async function scribeGithubSync(cfgOverride={}){return window.LenaicSync.run(scribeSafeAdapter,'sync',cfgOverride)}
 function scribeOpenGithubDialog(){const cfg=scribeGithubConfig(),dialog=document.getElementById('githubSyncDialog'),form=document.getElementById('githubSyncForm');form.elements.owner.value=cfg.owner;form.elements.repo.value=cfg.repo;form.elements.branch.value=cfg.branch;form.elements.path.value=cfg.path;form.elements.token.value='';form.elements.token.placeholder=scribeGithubToken()?'Jeton déjà chargé pour cette session':'github_pat_…';dialog.showModal()}
 document.getElementById('githubSyncBtn')?.addEventListener('click',scribeOpenGithubDialog);
 document.getElementById('githubSyncCancel')?.addEventListener('click',()=>document.getElementById('githubSyncDialog').close());
 document.getElementById('githubSyncForm')?.addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,fd=new FormData(form),token=String(fd.get('token')||'').trim();if(token)scribeGithubSetToken(token);if(!scribeGithubToken())return alert('Jeton GitHub requis.');const cfg={owner:String(fd.get('owner')||'').trim(),repo:String(fd.get('repo')||'').trim(),branch:String(fd.get('branch')||'main').trim(),path:String(fd.get('path')||scribe_GITHUB_FILE).trim()};scribeGithubWriteMeta(cfg);const submit=form.querySelector('[type="submit"]');submit.disabled=true;try{await scribeGithubSync(cfg);document.getElementById('githubSyncDialog').close()}catch(error){console.error(error);const b=document.getElementById('githubSyncBtn');if(b)b.dataset.syncState='error';alert('Synchronisation impossible : '+(error?.message||'erreur inconnue'))}finally{submit.disabled=false}});
 window.addEventListener('online',scribeGithubRefreshStatus);window.addEventListener('offline',scribeGithubRefreshStatus);scribeGithubRefreshStatus();
 
+
+function renderNav(){
 document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===activeTab))}
 function render(){renderNav();const view=document.querySelector("#view");if(activeTab==="assistant")renderAssistant(view);else if(activeTab==="drafts")renderDrafts(view);else if(activeTab==="contacts")renderContacts(view);else renderHistory(view)}
 
@@ -591,6 +585,11 @@ document.querySelector("#confirmAriane").onclick=e=>{
 
 render();
 publishScribeSnapshot("startup");
+
+const scribeSafeAdapter={id:'scribe',key:KEY,get:()=>data,valid:v=>!!v&&Array.isArray(v.drafts),has:v=>!!v.drafts?.length,
+ apply:async v=>{const next=cleanV3(v);localStorage.setItem(KEY,JSON.stringify(next));data=next;render()},
+ success:(at,sha)=>scribeGithubWriteMeta({dirty:false,lastSyncAt:at,lastRemoteSha:sha})};
+window.LenaicSync.register(scribeSafeAdapter);
 </script>
 <script src="lenaic-integration.js?v=2"></script>
 </body>
