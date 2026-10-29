@@ -82,11 +82,13 @@ dialog{border:1px solid #7e6744;background:#fff5cf;box-shadow:0 20px 60px #0005;
 </div>
 <script src="lenaic-bus.js?v=2"></script>
 <script>
+window.LenaicSync.assertStorageReady();
 const KEY="ariane-local-v2";
 const ARIANE_GITHUB_FILE="ariane.json",ARIANE_GITHUB_META_KEY="ariane-github-sync-v1";
 const STATUSES=["À enquêter","Préparée","En cours","Terminée","Archivée"];
 const uid=()=>crypto?.randomUUID?.()||("id-"+Date.now()+"-"+Math.random().toString(16).slice(2));
 let state=load();
+let arianeKnownPrimary=localStorage.getItem(KEY);
 function clean(data){
  if(!data||!Array.isArray(data.cases)) throw new Error("Le JSON ne contient pas de liste « cases ».");
  const seen=new Set();
@@ -99,8 +101,8 @@ function clean(data){
  data.activeId=data.cases.some(c=>c.id===data.activeId)?data.activeId:(data.cases[0]?.id||null);
  return {app:"Ariane",version:2,cases:data.cases,activeId:data.activeId};
 }
-function load(){try{const x=localStorage.getItem(KEY);return x?clean(JSON.parse(x)):{app:"Ariane",version:2,cases:[],activeId:null}}catch(e){return{app:"Ariane",version:2,cases:[],activeId:null}}}
-function save(options={}){window.LenaicSync?.localChange('ariane');localStorage.setItem(KEY,JSON.stringify(state));if(options.markDirty!==false)arianeGithubMarkDirty();}
+function load(){try{const x=localStorage.getItem(KEY);if(!x)return{app:"Ariane",version:2,cases:[],activeId:null};const parsed=JSON.parse(x);if(!parsed||!Array.isArray(parsed.cases))throw Error("Structure des dossiers invalide");return clean(parsed)}catch(e){throw Error("Lecture Ariane impossible : "+e.message)}}
+function save(options={}){window.LenaicSync?.localChange('ariane');window.LenaicSync.atomicStorage({[KEY]:JSON.stringify(state)},{[KEY]:arianeKnownPrimary});arianeKnownPrimary=localStorage.getItem(KEY);if(options.markDirty!==false)arianeGithubMarkDirty();}
 function active(){return state.cases.find(c=>c.id===state.activeId)||null}
 
 
@@ -210,8 +212,8 @@ function arianeGithubNow(){return new Date().toISOString()}
 function arianeGithubReadMeta(){try{return JSON.parse(localStorage.getItem(ariane_GITHUB_META_KEY)||'{}')}catch{return {}}}
 function arianeGithubWriteMeta(patch){const next={...arianeGithubReadMeta(),...patch};localStorage.setItem(ariane_GITHUB_META_KEY,JSON.stringify(next));arianeGithubRefreshStatus();return next}
 function arianeGithubMarkDirty(){const m=arianeGithubReadMeta();arianeGithubWriteMeta({dirty:true,localChangedAt:arianeGithubNow(),lastSyncAt:m.lastSyncAt||''})}
-function arianeGithubToken(){for(const key of ariane_GITHUB_TOKEN_KEYS){const token=sessionStorage.getItem(key);if(token)return token}return ''}
-function arianeGithubSetToken(token){if(!token)return;for(const key of ariane_GITHUB_TOKEN_KEYS)sessionStorage.setItem(key,token)}
+function arianeGithubToken(){return window.LenaicSync.hasToken()}
+function arianeGithubSetToken(token){window.LenaicSync.setToken(token)}
 function arianeGithubConfig(){const m=arianeGithubReadMeta(),host=location.hostname.match(/^([^.]+)\.github\.io$/i);return{owner:m.owner||host?.[1]||'ikare63',repo:m.repo||'data',branch:m.branch||'main',path:m.path||ariane_GITHUB_FILE}}
 function arianeGithubRefreshStatus(){const b=document.getElementById('githubSyncBtn');if(!b)return;const m=arianeGithubReadMeta();let status=!navigator.onLine?'offline':m.dirty?'dirty':m.lastSyncAt?'ok':'dirty';b.dataset.syncState=status;b.title=status==='ok'?`GitHub synchronisé · ${new Date(m.lastSyncAt).toLocaleString('fr-FR')}`:status==='offline'?'GitHub — hors connexion':'GitHub — sauvegarde à synchroniser';b.setAttribute('aria-label',b.title)}
 async function arianeGithubSync(cfgOverride={}){return window.LenaicSync.run(arianeSafeAdapter,'sync',cfgOverride)}
@@ -236,7 +238,8 @@ processPistoriaInbox();
 if(window.LenaicBus)LenaicBus.subscribe(()=>processPistoriaInbox());
 
 const arianeSafeAdapter={id:'ariane',key:KEY,get:()=>state,valid:v=>!!v&&Array.isArray(v.cases),has:v=>!!v.cases?.length,
- apply:async v=>{const next=clean(v);localStorage.setItem(KEY,JSON.stringify(next));state=next;render()},
+ revision:()=>window.LenaicSync.rawStorage([KEY]),consistent:(v,r)=>r[KEY]===arianeKnownPrimary,
+ apply:async(v,expected)=>{const next=clean(v),raw=JSON.stringify(next);window.LenaicSync.atomicStorage({[KEY]:raw},expected);arianeKnownPrimary=raw;state=next;render();return next},
  success:(at,sha)=>arianeGithubWriteMeta({dirty:false,lastSyncAt:at,lastRemoteSha:sha})};
 window.LenaicSync.register(arianeSafeAdapter);
 </script>

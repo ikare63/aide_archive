@@ -120,6 +120,7 @@ dialog{border:1px solid var(--line);background:var(--paper);border-radius:14px;b
 
 <script src="lenaic-bus.js?v=2"></script>
 <script>
+window.LenaicSync.assertStorageReady();
 const KEY="scribe-local-v3";
 const SCRIBE_GITHUB_FILE="scribe.json",SCRIBE_GITHUB_META_KEY="scribe-github-sync-v1";
 const SCRIBE_SNAPSHOT_KEY="lenaic-scribe-snapshot-v1";
@@ -208,10 +209,10 @@ function routeFromTemplate(t){return Object.entries(routes).find(([id,r])=>r.tem
 function load(){
  try{
   const raw=localStorage.getItem(KEY);
-  if(raw)return cleanV3(JSON.parse(raw));
+  if(raw){const parsed=JSON.parse(raw);if(!parsed||!["contacts","drafts","history"].every(k=>Array.isArray(parsed[k])))throw Error("Structure Scribe invalide");return cleanV3(parsed)}
   const old=localStorage.getItem(OLD_KEY);
   if(old){const migrated=cleanV3(JSON.parse(old));localStorage.setItem(KEY,JSON.stringify(migrated));return migrated}
- }catch(e){}
+ }catch(e){throw Error("Lecture Scribe impossible : "+e.message)}
  return emptyData()
 }
 function scribeContactLabel(d){
@@ -235,11 +236,12 @@ function publishScribeEvent(type,d,payload={}){
  if(!window.LenaicBus||!d)return;
  LenaicBus.publish(type,{draftId:d.id,title:d.title||"Demande aux archives",contact:scribeContactLabel(d),status:d.status,sentAt:d.sentAt||null,receivedAt:d.receivedAt||null,...payload},{source:"scribe",target:"3615"});
 }
-function save(options={}){window.LenaicSync?.localChange('scribe');localStorage.setItem(KEY,JSON.stringify(data));publishScribeSnapshot("save");if(options.markDirty!==false)scribeGithubMarkDirty()}
+function save(options={}){window.LenaicSync?.localChange('scribe');window.LenaicSync.atomicStorage({[KEY]:JSON.stringify(data)},{[KEY]:scribeKnownPrimary});scribeKnownPrimary=localStorage.getItem(KEY);publishScribeSnapshot("save");if(options.markDirty!==false)scribeGithubMarkDirty()}
 
 function download(name,obj){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},600)}
 
 let data=load(),activeTab="assistant",routeId="justice",templateId="justice",objectiveId=data.settings.defaultObjective||"locate",currentDraftId=null,values={},extra="",customSubject="",customBody="",arianeCache=null;
+let scribeKnownPrimary=localStorage.getItem(KEY);
 
 function currentContact(){return data.contacts.find(c=>c.id===document.querySelector("#contactSelect")?.value)||null}
 function routeForTemplate(t){return Object.entries(routes).find(([id,r])=>r.template===t)?.[0]||"other"}
@@ -340,8 +342,8 @@ function scribeGithubNow(){return new Date().toISOString()}
 function scribeGithubReadMeta(){try{return JSON.parse(localStorage.getItem(scribe_GITHUB_META_KEY)||'{}')}catch{return {}}}
 function scribeGithubWriteMeta(patch){const next={...scribeGithubReadMeta(),...patch};localStorage.setItem(scribe_GITHUB_META_KEY,JSON.stringify(next));scribeGithubRefreshStatus();return next}
 function scribeGithubMarkDirty(){const m=scribeGithubReadMeta();scribeGithubWriteMeta({dirty:true,localChangedAt:scribeGithubNow(),lastSyncAt:m.lastSyncAt||''})}
-function scribeGithubToken(){for(const key of scribe_GITHUB_TOKEN_KEYS){const token=sessionStorage.getItem(key);if(token)return token}return ''}
-function scribeGithubSetToken(token){if(!token)return;for(const key of scribe_GITHUB_TOKEN_KEYS)sessionStorage.setItem(key,token)}
+function scribeGithubToken(){return window.LenaicSync.hasToken()}
+function scribeGithubSetToken(token){window.LenaicSync.setToken(token)}
 function scribeGithubConfig(){const m=scribeGithubReadMeta(),host=location.hostname.match(/^([^.]+)\.github\.io$/i);return{owner:m.owner||host?.[1]||'ikare63',repo:m.repo||'data',branch:m.branch||'main',path:m.path||scribe_GITHUB_FILE}}
 function scribeGithubRefreshStatus(){const b=document.getElementById('githubSyncBtn');if(!b)return;const m=scribeGithubReadMeta();let status=!navigator.onLine?'offline':m.dirty?'dirty':m.lastSyncAt?'ok':'dirty';b.dataset.syncState=status;b.title=status==='ok'?`GitHub synchronisé · ${new Date(m.lastSyncAt).toLocaleString('fr-FR')}`:status==='offline'?'GitHub — hors connexion':'GitHub — sauvegarde à synchroniser';b.setAttribute('aria-label',b.title)}
 async function scribeGithubSync(cfgOverride={}){return window.LenaicSync.run(scribeSafeAdapter,'sync',cfgOverride)}
@@ -587,7 +589,8 @@ render();
 publishScribeSnapshot("startup");
 
 const scribeSafeAdapter={id:'scribe',key:KEY,get:()=>data,valid:v=>!!v&&Array.isArray(v.drafts),has:v=>!!v.drafts?.length,
- apply:async v=>{const next=cleanV3(v);localStorage.setItem(KEY,JSON.stringify(next));data=next;render()},
+ revision:()=>window.LenaicSync.rawStorage([KEY]),consistent:(v,r)=>r[KEY]===scribeKnownPrimary,
+ apply:async(v,expected)=>{const next=cleanV3(v),raw=JSON.stringify(next);window.LenaicSync.atomicStorage({[KEY]:raw},expected);scribeKnownPrimary=raw;data=next;render();return next},
  success:(at,sha)=>scribeGithubWriteMeta({dirty:false,lastSyncAt:at,lastRemoteSha:sha})};
 window.LenaicSync.register(scribeSafeAdapter);
 </script>
